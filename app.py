@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import plotly.io as pio
 import io
 from fpdf import FPDF
 from datetime import datetime
@@ -145,10 +144,6 @@ def load_csv(file_bytes: bytes, filename: str) -> pd.DataFrame:
     return df
 
 
-def fig_to_png(fig) -> bytes:
-    return pio.to_image(fig, format="png", width=1000, height=480)
-
-
 def build_pdf(df: pd.DataFrame, stats: pd.DataFrame,
               charts: list[tuple[str, bytes]], log: list[str]) -> bytes:
     pdf = FPDF()
@@ -220,12 +215,20 @@ def build_pdf(df: pd.DataFrame, stats: pd.DataFrame,
             pdf.cell(cw, 5, str(v)[:18], border=1)
         pdf.ln()
 
-    # gráficos
-    for title, img_bytes in charts:
+    # lista de gráficos gerados (visualizáveis no app)
+    if charts:
         pdf.add_page()
-        pdf.set_font("Helvetica", "B", 12)
-        pdf.cell(0, 9, title, ln=True)
-        pdf.image(io.BytesIO(img_bytes), x=10, w=190)
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.cell(0, 9, "Gráficos gerados no app", ln=True)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.multi_cell(
+            0, 7,
+            "Os gráficos abaixo estão disponíveis na aba 'Análise Física' do aplicativo. "
+            "A exportação de imagens foi desativada para garantir carregamento rápido no Streamlit Cloud.",
+        )
+        pdf.ln(3)
+        for i, (title, _) in enumerate(charts, 1):
+            pdf.cell(0, 7, f"  {i}. {title}", ln=True)
 
     return bytes(pdf.output())
 
@@ -240,11 +243,7 @@ if "charts_pdf" not in st.session_state:
 
 # ── barra lateral: referência de estádios ────────────────────────────────────
 with st.sidebar:
-    st.image(
-        "https://upload.wikimedia.org/wikipedia/en/thumb/2/27/2026_FIFA_World_Cup_emblem.svg/220px-2026_FIFA_World_Cup_emblem.svg.png",
-        width=120,
-    )
-    st.markdown("### FIFA World Cup 2026")
+    st.markdown("### ⚽ FIFA World Cup 2026")
     st.caption("Canada · México · EUA · 48 seleções · 104 jogos")
     st.divider()
     st.markdown("**🏟️ Estádios do torneio**")
@@ -468,10 +467,7 @@ with tab3:
                 height=500,
             )
             st.plotly_chart(fig_zones, use_container_width=True)
-            try:
-                charts_pdf.append(("Distância por zona de velocidade", fig_to_png(fig_zones)))
-            except Exception:
-                pass
+            charts_pdf.append(("Distância por zona de velocidade", None))
 
         # ── 2. Rankings ───────────────────────────────────────────────────────
         st.subheader("🏅 Rankings")
@@ -504,10 +500,7 @@ with tab3:
             )
             fig_team.update_xaxes(tickangle=-30)
             st.plotly_chart(fig_team, use_container_width=True)
-            try:
-                charts_pdf.append((f"Média de {metric_team} por seleção", fig_to_png(fig_team)))
-            except Exception:
-                pass
+            charts_pdf.append((f"Média de {metric_team} por seleção", None))
 
         # ── 4. Dispersão velocidade máx × distância ───────────────────────────
         if {"Max Speed (km/h)", "Total Distance (m)", "Player Name"}.issubset(df_a.columns):
@@ -522,10 +515,7 @@ with tab3:
                 size_max=18,
             )
             st.plotly_chart(fig_scat, use_container_width=True)
-            try:
-                charts_pdf.append(("Velocidade Máxima × Distância Total", fig_to_png(fig_scat)))
-            except Exception:
-                pass
+            charts_pdf.append(("Velocidade Máxima × Distância Total", None))
 
         # ── 5. Perfil individual ──────────────────────────────────────────────
         if "Player Name" in df_a.columns and zone_cols:
@@ -551,10 +541,7 @@ with tab3:
                 height=400,
             )
             st.plotly_chart(fig_radar, use_container_width=True)
-            try:
-                charts_pdf.append((f"Perfil de zonas — {jogador}", fig_to_png(fig_radar)))
-            except Exception:
-                pass
+            charts_pdf.append((f"Perfil de zonas — {jogador}", None))
 
         st.session_state.charts_pdf = charts_pdf
 
