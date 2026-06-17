@@ -1409,6 +1409,7 @@ with tab_dest:
         # ---- #3 DNA + #4 CONFRONTO -----------------------------------------
         with dsub[1]:
             st.subheader("🧬 DNA físico da seleção")
+            sel = []
             if not int_m or len(teams_all) < 2:
                 st.info("Carregue mais seleções para comparar o DNA físico.")
             else:
@@ -1431,33 +1432,61 @@ with tab_dest:
 
             st.divider()
             st.subheader("⚔️ Simulador de confronto")
-            c1, c2, c3 = st.columns(3)
-            ta = c1.selectbox("Seleção A", teams_all, key="mu_a")
-            tb = c2.selectbox("Seleção B", teams_all,
-                              index=min(1, len(teams_all) - 1), key="mu_b")
-            mmetric = c3.selectbox("Métrica", int_m or all_m, key="mu_metric")
-            if ta == tb:
-                st.info("Escolha duas seleções diferentes.")
-            elif has_pos:
-                rows = []
-                for p in POSITION_ORDER:
-                    va = d[(d["Team Name"] == ta) & (d["Posição"] == p)][mmetric].mean()
-                    vb = d[(d["Team Name"] == tb) & (d["Posição"] == p)][mmetric].mean()
-                    rows.append({"Posição": POSITION_LABELS[p],
-                                 team_code(ta): va, team_code(tb): vb})
-                mu = pd.DataFrame(rows).dropna(how="all",
-                                                subset=[team_code(ta), team_code(tb)])
-                figm = px.bar(mu.melt(id_vars="Posição", var_name="Seleção", value_name=mmetric),
-                              x="Posição", y=mmetric, color="Seleção", barmode="group",
-                              color_discrete_sequence=["#7a1f3d", "#f0a500"],
-                              title=f"{team_code(ta)} × {team_code(tb)} — {mmetric} por posição")
-                st.plotly_chart(figm, use_container_width=True)
-                wa = (d[d["Team Name"] == ta][mmetric].mean())
-                wb = (d[d["Team Name"] == tb][mmetric].mean())
-                if pd.notna(wa) and pd.notna(wb):
-                    win = ta if wa > wb else tb
-                    st.success(f"**Vantagem física geral em {mmetric}: {win}** "
-                               f"({max(wa, wb):.1f} vs {min(wa, wb):.1f})")
+            duo = sel[:2]
+            if len(duo) < 2:
+                st.info("Selecione **duas** seleções no DNA físico acima — elas entram "
+                        "automaticamente aqui no confronto.")
+            else:
+                ta, tb = duo[0], duo[1]
+                if len(sel) > 2:
+                    st.caption(f"Usando as duas primeiras seleções: "
+                               f"**{team_code(ta)}** e **{team_code(tb)}**.")
+                ca, cb = team_code(ta), team_code(tb)
+                st.markdown(f"### {ca} × {cb}")
+                st.caption("Um gráfico por variável — todas as métricas de intensidade.")
+
+                metrics_mu = int_m or all_m
+                summ = []
+                cols = st.columns(2)
+                for i, m in enumerate(metrics_mu):
+                    if has_pos:
+                        rows = []
+                        for p in POSITION_ORDER:
+                            va = d[(d["Team Name"] == ta) & (d["Posição"] == p)][m].mean()
+                            vb = d[(d["Team Name"] == tb) & (d["Posição"] == p)][m].mean()
+                            rows.append({"Posição": POSITION_LABELS[p], ca: va, cb: vb})
+                        mu = pd.DataFrame(rows)
+                        figm = px.bar(mu.melt(id_vars="Posição", var_name="Seleção",
+                                              value_name=m),
+                                      x="Posição", y=m, color="Seleção", barmode="group",
+                                      color_discrete_sequence=["#7a1f3d", "#f0a500"], title=m)
+                    else:
+                        va = d[d["Team Name"] == ta][m].mean()
+                        vb = d[d["Team Name"] == tb][m].mean()
+                        figm = px.bar(pd.DataFrame({"Seleção": [ca, cb], m: [va, vb]}),
+                                      x="Seleção", y=m, color="Seleção",
+                                      color_discrete_sequence=["#7a1f3d", "#f0a500"], title=m)
+                    figm.update_layout(height=330, showlegend=(i == 0),
+                                       margin=dict(t=46, b=8, l=8, r=8),
+                                       title_font_size=14)
+                    figm.update_xaxes(tickangle=-15)
+                    cols[i % 2].plotly_chart(figm, use_container_width=True)
+
+                    wa = d[d["Team Name"] == ta][m].mean()
+                    wb = d[d["Team Name"] == tb][m].mean()
+                    if pd.notna(wa) and pd.notna(wb):
+                        summ.append({"Variável": m, ca: round(wa, 2), cb: round(wb, 2),
+                                     "Vantagem": ca if wa > wb else cb})
+
+                if summ:
+                    sdf = pd.DataFrame(summ)
+                    st.markdown("**Resumo — vantagem por variável**")
+                    st.dataframe(sdf, hide_index=True, use_container_width=True)
+                    wa_n = int((sdf["Vantagem"] == ca).sum())
+                    wb_n = int((sdf["Vantagem"] == cb).sum())
+                    champ = ca if wa_n > wb_n else cb
+                    st.success(f"**Vantagem física geral: {champ}** "
+                               f"({max(wa_n, wb_n)} de {len(sdf)} variáveis)")
 
         # ---- #17 COMPARADOR DE JOGADORES -----------------------------------
         with dsub[2]:
