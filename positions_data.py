@@ -66,3 +66,40 @@ def get_position(team_name, jersey):
     except (ValueError, TypeError):
         return None
     return POSITIONS.get(team, {}).get(j)
+
+
+# {TEAM_NAME (grafia do CSV): (código de 3 letras, código ISO p/ bandeira)}
+TEAM_META = {
+    "MEXICO": ("MEX", "mx"), "SOUTH AFRICA": ("RSA", "za"),
+    "KOREA REPUBLIC": ("KOR", "kr"), "CZECHIA": ("CZE", "cz"),
+    "CANADA": ("CAN", "ca"), "BOSNIA AND HERZEGOVINA": ("BIH", "ba"),
+    "QATAR": ("QAT", "qa"), "SWITZERLAND": ("SUI", "ch"),
+    "BRAZIL": ("BRA", "br"), "HAITI": ("HAI", "ht"),
+    "MOROCCO": ("MAR", "ma"), "SCOTLAND": ("SCO", "gb-sct"),
+    "AUSTRALIA": ("AUS", "au"), "PARAGUAY": ("PAR", "py"),
+    "TÜRKIYE": ("TUR", "tr"), "USA": ("USA", "us"),
+    "CURAÇAO": ("CUW", "cw"), "ECUADOR": ("ECU", "ec"),
+    "GERMANY": ("GER", "de"), "CÔTE D'IVOIRE": ("CIV", "ci"),
+    "JAPAN": ("JPN", "jp"), "NETHERLANDS": ("NED", "nl"),
+    "SWEDEN": ("SWE", "se"), "TUNISIA": ("TUN", "tn"),
+    "CABO VERDE": ("CPV", "cv"), "SAUDI ARABIA": ("KSA", "sa"),
+    "SPAIN": ("ESP", "es"), "URUGUAY": ("URU", "uy"),
+    "BELGIUM": ("BEL", "be"), "EGYPT": ("EGY", "eg"),
+    "IR IRAN": ("IRN", "ir"), "NEW ZEALAND": ("NZL", "nz"),
+}
+
+
+def team_code(team_name):
+    """Sigla de 3 letras (ex.: 'AUSTRALIA' -> 'AUS'). Fallback: 3 primeiras letras."""
+    if team_name is None:
+        return "?"
+    meta = TEAM_META.get(str(team_name).strip().upper())
+    return meta[0] if meta else str(team_name).strip().upper()[:3]
+
+
+def flag_url(team_name, width=40):
+    """URL da bandeira (flagcdn) para a seleção, ou None se desconhecida."""
+    if team_name is None:
+        return None
+    meta = TEAM_META.get(str(team_name).strip().upper())
+    return f"https://flagcdn.com/w{width}/{meta[1]}.png" if meta else None

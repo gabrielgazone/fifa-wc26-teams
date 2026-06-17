@@ -9,6 +9,7 @@ from datetime import datetime
 
 from positions_data import (
     get_position, POSITION_LABELS, POSITION_ORDER,
+    team_code, flag_url,
 )
 
 # ── configuração da página ────────────────────────────────────────────────────
@@ -411,6 +412,16 @@ with st.sidebar:
         "16 câmeras ópticas/estádio · 50 Hz  \n"
         "Até 172 M pontos de dados/jogo"
     )
+    with st.expander("📚 Referência científica"):
+        st.markdown(
+            "**Bradley, P. S. (2024).** *'Setting the Benchmark' Part 2: "
+            "Contextualising the Physical Demands of Teams in the FIFA World Cup "
+            "Qatar 2022.* **Biology of Sport, 41(1), 271–278.**  \n"
+            "[doi.org/10.5114/biolsport.2024.131091]"
+            "(https://doi.org/10.5114/biolsport.2024.131091)  \n\n"
+            "As análises de benchmark de equipe (totais absolutos, zonas Z4+Z5 e Z5, "
+            "coeficiente de variação e mapas de quadrantes) seguem a metodologia deste estudo."
+        )
 
 # ── cabeçalho ─────────────────────────────────────────────────────────────────
 col_logo, col_title = st.columns([1, 8])
@@ -631,6 +642,7 @@ with tab3:
                 f["HID (m)"] = (f["15-20 km/h (m)"] + f["20-25 km/h (m)"]
                                 + f["25+ km/h (m)"])
                 f["HID/min"] = f["HID (m)"] / dur
+                f["Z4+Z5 (m)"] = f["20-25 km/h (m)"] + f["25+ km/h (m)"]
                 f["Sprint (m)"] = f["25+ km/h (m)"]
                 f["Sprint/min"] = f["25+ km/h (m)"] / dur
                 if "Total Distance (m)" in f.columns:
@@ -649,7 +661,7 @@ with tab3:
 
         raw_metrics = [c for c in NUMERIC_COLS if c in df_a.columns]
         derived_metrics = [c for c in ["Distância/min", "HID (m)", "HID/min",
-                                       "Sprint (m)", "Sprint/min", "% Sprint",
+                                       "Z4+Z5 (m)", "Sprint (m)", "Sprint/min", "% Sprint",
                                        "Sprints/min", "Speed runs/min", "m por sprint"]
                            if c in df_a.columns]
         all_metrics = raw_metrics + derived_metrics
@@ -664,6 +676,7 @@ with tab3:
 
         sub_tabs = st.tabs([
             "📊 Visão geral",
+            "🏟️ Torneio (benchmark)",
             "🏆 Por resultado",
             "🧍 Por posição",
             "🧠 Avançado",
@@ -674,19 +687,8 @@ with tab3:
         # VISÃO GERAL
         # ===================================================================
         with sub_tabs[0]:
-            if "Team Name" in df_a.columns and all_metrics:
-                st.subheader("🌍 Comparativo entre seleções")
-                default_idx = all_metrics.index("Distância/min") if "Distância/min" in all_metrics else 0
-                m_team = st.selectbox("Métrica", all_metrics, index=default_idx,
-                                      key="vg_metric_team")
-                team_avg = (df_a.groupby("Team Name")[m_team].mean()
-                            .sort_values(ascending=False).reset_index())
-                fig_team = px.bar(team_avg, x="Team Name", y=m_team,
-                                  title=f"Média de {m_team} por seleção",
-                                  color=m_team, color_continuous_scale="Blues")
-                fig_team.update_xaxes(tickangle=-30)
-                st.plotly_chart(fig_team, use_container_width=True)
-                charts_pdf.append((f"Média de {m_team} por seleção", None))
+            st.caption("Para comparar **seleções**, use a aba **🏟️ Torneio** "
+                       "(totais absolutos da equipe, no estilo do benchmark da FIFA).")
 
             if full_zones and "Player Name" in df_a.columns:
                 st.subheader("🏃 Zonas de velocidade por jogador (top 30 em distância)")
@@ -736,9 +738,136 @@ with tab3:
                 charts_pdf.append(("Intensidade × Velocidade máxima", None))
 
         # ===================================================================
-        # POR RESULTADO  (#1 intensidade · #2 alta intensidade · #3 teste · #10 distribuição)
+        # TORNEIO (benchmark estilo FIFA — totais absolutos por equipe)
         # ===================================================================
         with sub_tabs[1]:
+            if "Team Name" not in df_a.columns or "Match ID" not in df_a.columns:
+                st.info("Dados insuficientes para o benchmark por seleção.")
+            else:
+                st.subheader("🏟️ Benchmark de equipe (totais absolutos)")
+                st.caption(
+                    "Total **da equipe** (soma de todos os jogadores) por partida — não a média "
+                    "por jogador. Barra = média entre as partidas da seleção; pontos = cada "
+                    "partida; linha tracejada = média do conjunto. "
+                    "Referência: Bradley (2024), Biology of Sport 41(1):271–278."
+                )
+
+                bench_defs = []
+                if "Total Distance (m)" in df_a.columns:
+                    bench_defs.append(("Distância total", "Total Distance (m)", "km", 1000))
+                if "Z4+Z5 (m)" in df_a.columns:
+                    bench_defs.append(("Alta intensidade Z4+Z5 (≥20 km/h)", "Z4+Z5 (m)", "m", 1))
+                if "25+ km/h (m)" in df_a.columns:
+                    bench_defs.append(("Sprint Z5 (≥25 km/h)", "25+ km/h (m)", "m", 1))
+
+                if not bench_defs:
+                    st.info("Colunas de distância não encontradas.")
+                else:
+                    pick = st.selectbox("Métrica de equipe", [b[0] for b in bench_defs],
+                                        key="trn_metric")
+                    _, col, unit, div = next(b for b in bench_defs if b[0] == pick)
+
+                    tm = (df_a.groupby(["Team Name", "Match ID"])[col].sum() / div).reset_index()
+                    tm.rename(columns={col: "val"}, inplace=True)
+                    team_stat = (tm.groupby("Team Name")["val"]
+                                 .agg(media="mean", desvio="std", jogos="count")
+                                 .reset_index().sort_values("media", ascending=False))
+                    team_stat["CV"] = team_stat["desvio"] / team_stat["media"] * 100
+                    avg = team_stat["media"].mean()
+
+                    order = team_stat["Team Name"].tolist()
+                    code_map = {t: team_code(t) for t in order}
+                    codes = [code_map[t] for t in order]
+
+                    fig_b = go.Figure()
+                    fig_b.add_trace(go.Bar(
+                        x=codes, y=team_stat["media"], marker_color="#7a1f3d",
+                        text=team_stat["media"].round(1), textposition="outside",
+                        name="Média", hovertext=team_stat["Team Name"],
+                    ))
+                    fig_b.add_trace(go.Scatter(
+                        x=tm["Team Name"].map(code_map), y=tm["val"], mode="markers",
+                        marker=dict(color="#f0a500", size=7,
+                                    line=dict(color="#7a1f3d", width=1)),
+                        name="Por partida", hovertext=tm["Team Name"],
+                    ))
+                    fig_b.add_hline(y=avg, line_dash="dot", line_color="black",
+                                    annotation_text=f"Média {avg:.1f} {unit}",
+                                    annotation_position="top right")
+                    fig_b.update_layout(
+                        title=f"{pick} por seleção ({unit})",
+                        yaxis_title=f"{pick} ({unit})", height=470, xaxis_tickangle=-60,
+                        legend=dict(orientation="h", y=1.1),
+                    )
+                    st.plotly_chart(fig_b, use_container_width=True)
+                    charts_pdf.append((f"Benchmark — {pick}", None))
+
+                    cv_ok = team_stat.dropna(subset=["CV"])
+                    if not cv_ok.empty:
+                        cmin = cv_ok.loc[cv_ok["CV"].idxmin()]
+                        cmax = cv_ok.loc[cv_ok["CV"].idxmax()]
+                        cc1, cc2 = st.columns(2)
+                        cc1.metric(f"Mais consistente — {cmin['Team Name']}",
+                                   f"CV {cmin['CV']:.1f}%")
+                        cc2.metric(f"Mais variável — {cmax['Team Name']}",
+                                   f"CV {cmax['CV']:.1f}%")
+                    else:
+                        st.caption("ℹ️ O coeficiente de variação (CV) entre partidas aparece "
+                                   "quando uma seleção tiver ≥ 2 jogos carregados.")
+
+                if {"Total Distance (m)", "Z4+Z5 (m)", "25+ km/h (m)"}.issubset(df_a.columns):
+                    st.divider()
+                    st.subheader("🗺️ Mapa de quadrantes (com bandeiras)")
+                    st.caption("Cada seleção posicionada pelo total da equipe. As linhas marcam "
+                               "as médias do conjunto, dividindo em quadrantes (alto/baixo).")
+
+                    agg_t = (df_a.groupby(["Team Name", "Match ID"])
+                             .agg(td=("Total Distance (m)", "sum"),
+                                  z45=("Z4+Z5 (m)", "sum"),
+                                  z5=("25+ km/h (m)", "sum")).reset_index())
+                    team_xy = (agg_t.groupby("Team Name")
+                               .agg(td=("td", "mean"), z45=("z45", "mean"),
+                                    z5=("z5", "mean")).reset_index())
+                    for c in ["td", "z45", "z5"]:
+                        team_xy[c] /= 1000  # km
+
+                    def quad_chart(ycol, ylab):
+                        mx, my = team_xy["td"].mean(), team_xy[ycol].mean()
+                        xr = (team_xy["td"].max() - team_xy["td"].min()) or 1
+                        yr = (team_xy[ycol].max() - team_xy[ycol].min()) or 1
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=team_xy["td"], y=team_xy[ycol], mode="text",
+                            text=[team_code(t) for t in team_xy["Team Name"]],
+                            textposition="bottom center", textfont=dict(size=9),
+                            hovertext=team_xy["Team Name"], name="",
+                        ))
+                        for _, rr in team_xy.iterrows():
+                            url = flag_url(rr["Team Name"])
+                            if url:
+                                fig.add_layout_image(dict(
+                                    source=url, x=rr["td"], y=rr[ycol],
+                                    sizex=xr * 0.05, sizey=yr * 0.07, xref="x", yref="y",
+                                    xanchor="center", yanchor="middle", layer="above"))
+                        fig.add_vline(x=mx, line_dash="dash", line_color="gray")
+                        fig.add_hline(y=my, line_dash="dash", line_color="gray")
+                        fig.update_layout(title=f"{ylab} × Distância total",
+                                          xaxis_title="Distância total (km)",
+                                          yaxis_title=f"{ylab} (km)", height=480,
+                                          showlegend=False)
+                        return fig
+
+                    qa, qb = st.columns(2)
+                    qa.plotly_chart(quad_chart("z45", "Z4+Z5 (≥20 km/h)"),
+                                    use_container_width=True)
+                    qb.plotly_chart(quad_chart("z5", "Z5 sprint (≥25 km/h)"),
+                                    use_container_width=True)
+                    charts_pdf.append(("Mapa de quadrantes (bandeiras)", None))
+
+        # ===================================================================
+        # POR RESULTADO  (#1 intensidade · #2 alta intensidade · #3 teste · #10 distribuição)
+        # ===================================================================
+        with sub_tabs[2]:
             if not has_result:
                 st.info("Sem informação de resultado para os dados carregados.")
             else:
@@ -834,7 +963,7 @@ with tab3:
         # ===================================================================
         # POR POSIÇÃO  (#2 por posição · #4 z-score · #10 distribuição)
         # ===================================================================
-        with sub_tabs[2]:
+        with sub_tabs[3]:
             if not has_position:
                 st.info("Sem informação de posição para os dados carregados.")
             else:
@@ -896,7 +1025,7 @@ with tab3:
         # ===================================================================
         # AVANÇADO  (#5 eficiência · #6 densidade · #7 clustering · #8 correlação · #9 benchmark)
         # ===================================================================
-        with sub_tabs[3]:
+        with sub_tabs[4]:
             st.subheader("⚡ #5 Eficiência de sprint")
             if {"m por sprint", "# Sprints", "Sprint (m)"}.issubset(df_a.columns):
                 st.caption("Metros por sprint = comprimento típico do sprint (qualidade) "
@@ -1005,7 +1134,7 @@ with tab3:
         # ===================================================================
         # JOGADOR
         # ===================================================================
-        with sub_tabs[4]:
+        with sub_tabs[5]:
             if "Player Name" in df_a.columns and full_zones:
                 st.subheader("👤 Perfil individual")
                 jog = st.selectbox("Jogador", sorted(df_a["Player Name"].dropna().unique()),
