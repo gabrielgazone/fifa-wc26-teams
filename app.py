@@ -1512,15 +1512,31 @@ with tab_dest:
                                    title="Percentil por métrica (vs todos os jogadores)",
                                    height=460)
                 st.plotly_chart(figc, use_container_width=True)
+                st.markdown("##### Comparação por variável")
                 comp_rows = []
-                for m in int_m:
+                cols = st.columns(2)
+                for i, m in enumerate(int_m):
                     va, vb = ra.get(m), rb.get(m)
+                    figm = px.bar(pd.DataFrame({"Jogador": [pa, pb], m: [va, vb]}),
+                                  x="Jogador", y=m, color="Jogador",
+                                  color_discrete_sequence=["#7a1f3d", "#f0a500"], title=m)
+                    figm.update_layout(height=300, showlegend=False,
+                                       margin=dict(t=44, b=8, l=8, r=8), title_font_size=14)
+                    cols[i % 2].plotly_chart(figm, use_container_width=True)
                     win = pa if (pd.notna(va) and pd.notna(vb) and va > vb) else (
                         pb if pd.notna(vb) else "—")
                     comp_rows.append({"Métrica": m, pa: round(va, 2) if pd.notna(va) else None,
                                       pb: round(vb, 2) if pd.notna(vb) else None,
                                       "Vantagem": win})
-                st.dataframe(pd.DataFrame(comp_rows), hide_index=True, use_container_width=True)
+                sdf = pd.DataFrame(comp_rows)
+                st.markdown("**Resumo — vantagem por variável**")
+                st.dataframe(sdf, hide_index=True, use_container_width=True)
+                wa_n = int((sdf["Vantagem"] == pa).sum())
+                wb_n = int((sdf["Vantagem"] == pb).sum())
+                if wa_n or wb_n:
+                    champ = pa if wa_n >= wb_n else pb
+                    st.success(f"**Mais completo fisicamente: {champ}** "
+                               f"({max(wa_n, wb_n)} de {len(sdf)} variáveis)")
 
         # ---- #16 XI IDEAL FÍSICO -------------------------------------------
         with dsub[3]:
