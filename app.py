@@ -16,15 +16,57 @@ st.set_page_config(
 # ── banco de dados de partidas / estádios WC 2026 ────────────────────────────
 # Fonte: FIFA.com + beIN Sports + CBC News (consultado jun/2026)
 MATCH_DB = {
-    151626: {
-        "home": "AUSTRALIA", "away": "TÜRKIYE", "score": "2–0",
-        "date": "13/06/2026", "group": "D", "round": "Fase de Grupos",
-        "stadium": "BC Place (Vancouver Stadium)", "city": "Vancouver",
-        "country": "Canadá", "capacity": 48_821,
-        "surface": "Grama natural", "roof": "Teto retrátil",
-        "note": "Único estádio do torneio com Final da Copa do Mundo Feminina (2015). "
-                "Inaugurado em 1983; maior cobertura retrátil do tipo no mundo.",
-    },
+    # ── 11/06 ──
+    151600: {"home": "MEXICO", "away": "SOUTH AFRICA", "home_goals": 2, "away_goals": 0,
+             "score": "2–0", "date": "11/06/2026", "round": "Fase de Grupos",
+             "stadium": "Estadio Azteca (Mexico City Stadium)", "city": "Cidade do México",
+             "country": "México", "capacity": 80_824,
+             "scorers": "Jogo de abertura da Copa do Mundo 2026.",
+             "note": "Estádio de abertura — único a sediar 3 Copas (1970, 1986, 2026)."},
+    151608: {"home": "KOREA REPUBLIC", "away": "CZECHIA", "home_goals": 2, "away_goals": 1,
+             "score": "2–1", "date": "11/06/2026", "round": "Fase de Grupos"},
+    # ── 12/06 ──
+    151614: {"home": "CANADA", "away": "BOSNIA AND HERZEGOVINA", "home_goals": 1, "away_goals": 1,
+             "score": "1–1", "date": "12/06/2026", "round": "Fase de Grupos",
+             "stadium": "BMO Field (Toronto Stadium)", "city": "Toronto", "country": "Canadá",
+             "capacity": 45_736},
+    151625: {"home": "USA", "away": "PARAGUAY", "home_goals": 4, "away_goals": 1,
+             "score": "4–1", "date": "12/06/2026", "round": "Fase de Grupos"},
+    # ── 13/06 ──
+    151619: {"home": "HAITI", "away": "SCOTLAND", "home_goals": 0, "away_goals": 1,
+             "score": "0–1", "date": "13/06/2026", "round": "Fase de Grupos"},
+    151626: {"home": "AUSTRALIA", "away": "TÜRKIYE", "home_goals": 2, "away_goals": 0,
+             "score": "2–0", "date": "13/06/2026", "group": "D", "round": "Fase de Grupos",
+             "stadium": "BC Place (Vancouver Stadium)", "city": "Vancouver",
+             "country": "Canadá", "capacity": 48_821,
+             "surface": "Grama natural", "roof": "Teto retrátil",
+             "scorers": "Irankunda 27', Metcalfe 75' (AUS) · GK Patrick Beach: 8 defesas",
+             "note": "Único estádio do torneio com Final da Copa do Mundo Feminina (2015). "
+                     "Inaugurado em 1983; maior cobertura retrátil do tipo no mundo."},
+    151620: {"home": "BRAZIL", "away": "MOROCCO", "home_goals": 1, "away_goals": 1,
+             "score": "1–1", "date": "13/06/2026", "round": "Fase de Grupos"},
+    151613: {"home": "QATAR", "away": "SWITZERLAND", "home_goals": 1, "away_goals": 1,
+             "score": "1–1", "date": "13/06/2026", "round": "Fase de Grupos"},
+    # ── 14/06 ──
+    151632: {"home": "CÔTE D'IVOIRE", "away": "ECUADOR", "home_goals": 1, "away_goals": 0,
+             "score": "1–0", "date": "14/06/2026", "round": "Fase de Grupos"},
+    151631: {"home": "GERMANY", "away": "CURAÇAO", "home_goals": 7, "away_goals": 1,
+             "score": "7–1", "date": "14/06/2026", "round": "Fase de Grupos",
+             "note": "Maior goleada da primeira rodada."},
+    151638: {"home": "NETHERLANDS", "away": "JAPAN", "home_goals": 2, "away_goals": 2,
+             "score": "2–2", "date": "14/06/2026", "round": "Fase de Grupos"},
+    151637: {"home": "SWEDEN", "away": "TUNISIA", "home_goals": 5, "away_goals": 1,
+             "score": "5–1", "date": "14/06/2026", "round": "Fase de Grupos"},
+    # ── 15/06 ──
+    151650: {"home": "SAUDI ARABIA", "away": "URUGUAY", "home_goals": 1, "away_goals": 1,
+             "score": "1–1", "date": "15/06/2026", "round": "Fase de Grupos"},
+    151649: {"home": "SPAIN", "away": "CABO VERDE", "home_goals": 0, "away_goals": 0,
+             "score": "0–0", "date": "15/06/2026", "round": "Fase de Grupos",
+             "note": "Cabo Verde segurou os campeões europeus num dia histórico de 4 empates."},
+    151644: {"home": "IR IRAN", "away": "NEW ZEALAND", "home_goals": 2, "away_goals": 2,
+             "score": "2–2", "date": "15/06/2026", "round": "Fase de Grupos"},
+    151643: {"home": "BELGIUM", "away": "EGYPT", "home_goals": 1, "away_goals": 1,
+             "score": "1–1", "date": "15/06/2026", "round": "Fase de Grupos"},
 }
 
 STADIUM_DB = {
@@ -144,6 +186,47 @@ def load_csv(file_bytes: bytes, filename: str) -> pd.DataFrame:
     return df
 
 
+RESULT_COLS = ["Resultado", "Gols Marcados", "Gols Sofridos", "Saldo de Gols",
+               "Pontos", "Adversário"]
+RESULT_ORDER = ["Vitória", "Empate", "Derrota"]
+RESULT_COLORS = {"Vitória": "#2e9e4f", "Empate": "#f5c518", "Derrota": "#e53935"}
+
+
+def enrich_results(df: pd.DataFrame) -> pd.DataFrame:
+    """Cruza Team Name + Match ID com MATCH_DB para anexar o resultado da
+    partida a cada jogador (vitória/empate/derrota, gols, adversário)."""
+    if "Match ID" not in df.columns or "Team Name" not in df.columns:
+        return df
+    df = df.copy()
+
+    def outcome(row):
+        try:
+            info = MATCH_DB.get(int(row["Match ID"]))
+        except (ValueError, TypeError):
+            info = None
+        if not info:
+            return pd.Series([pd.NA] * len(RESULT_COLS), index=RESULT_COLS)
+        team = str(row["Team Name"]).strip().upper()
+        home, away = info["home"].strip().upper(), info["away"].strip().upper()
+        hg, ag = info["home_goals"], info["away_goals"]
+        if team == home:
+            gf, ga, opp = hg, ag, info["away"]
+        elif team == away:
+            gf, ga, opp = ag, hg, info["home"]
+        else:
+            return pd.Series([pd.NA] * len(RESULT_COLS), index=RESULT_COLS)
+        if gf > ga:
+            res, pts = "Vitória", 3
+        elif gf < ga:
+            res, pts = "Derrota", 0
+        else:
+            res, pts = "Empate", 1
+        return pd.Series([res, gf, ga, gf - ga, pts, opp], index=RESULT_COLS)
+
+    df[RESULT_COLS] = df.apply(outcome, axis=1)
+    return df
+
+
 def build_pdf(df: pd.DataFrame, stats: pd.DataFrame,
               charts: list[tuple[str, bytes]], log: list[str]) -> bytes:
     pdf = FPDF()
@@ -246,17 +329,17 @@ with st.sidebar:
     st.markdown("### ⚽ FIFA World Cup 2026")
     st.caption("Canada · México · EUA · 48 seleções · 104 jogos")
     st.divider()
-    st.markdown("**🏟️ Estádios do torneio**")
-    st.caption("Clique para expandir")
-    for nome, s in STADIUM_DB.items():
-        with st.expander(f"{s['city']} — {nome.split('(')[0].strip()}"):
-            st.write(f"**País:** {s['country']}")
-            st.write(f"**Capacidade:** {s['capacity']:,}")
-            st.write(f"**Jogos:** {s['matches_hosted']}")
-            st.write(f"**Superfície:** {s['surface']}")
-            st.write(f"**Cobertura:** {s.get('roof', '—')}")
+    with st.expander(f"🏟️ Estádios do torneio ({len(STADIUM_DB)})", expanded=False):
+        st.caption("Informação contextual — o foco do app são as análises físicas.")
+        for nome, s in STADIUM_DB.items():
+            st.markdown(
+                f"**{s['city']}** — {nome.split('(')[0].strip()}  \n"
+                f"{s['country']} · {s['capacity']:,} lug. · {s['matches_hosted']} jogos · "
+                f"{s['surface']}"
+            )
             if s.get("note"):
                 st.caption(s["note"])
+            st.divider()
     st.divider()
     st.caption(
         "Sistema de rastreamento: **EPTS FIFA**  \n"
@@ -312,7 +395,7 @@ with tab1:
                 except Exception as e:
                     st.error(f"Erro em {f.name}: {e}")
         if frames:
-            st.session_state.df = pd.concat(frames, ignore_index=True)
+            st.session_state.df = enrich_results(pd.concat(frames, ignore_index=True))
             st.session_state.log = []
             st.session_state.charts_pdf = []
 
@@ -336,25 +419,35 @@ with tab1:
                 mid_int = int(mid) if str(mid).isdigit() else mid
                 info = MATCH_DB.get(mid_int)
                 if info:
+                    grp = f" — Grupo {info['group']}" if info.get("group") else ""
                     with st.container(border=True):
-                        left, right = st.columns([2, 1])
-                        with left:
-                            st.markdown(
-                                f"### {info['home']} {info['score']} {info['away']}"
+                        st.markdown(f"### {info['home']} {info['score']} {info['away']}")
+                        st.caption(
+                            f"📅 {info.get('date', '—')}  ·  "
+                            f"{info.get('round', 'Fase de Grupos')}{grp}  ·  Match ID: {mid_int}"
+                        )
+                        linhas = []
+                        if info.get("stadium"):
+                            linhas.append(f"**🏟️ Estádio:** {info['stadium']}")
+                        if info.get("city"):
+                            linhas.append(
+                                f"**📍 Cidade:** {info['city']}, {info.get('country', '')}".rstrip(", ")
                             )
-                            st.caption(
-                                f"📅 {info['date']}  ·  {info['round']} — Grupo {info['group']}  ·  Match ID: {mid_int}"
+                        if info.get("capacity"):
+                            linhas.append(f"**👥 Capacidade:** {info['capacity']:,} pessoas")
+                        if info.get("surface"):
+                            linhas.append(
+                                f"**🌿 Superfície:** {info['surface']}  ·  "
+                                f"**🔲 Cobertura:** {info.get('roof', '—')}"
                             )
-                            st.markdown(
-                                f"**🏟️ Estádio:** {info['stadium']}  \n"
-                                f"**📍 Cidade:** {info['city']}, {info['country']}  \n"
-                                f"**👥 Capacidade:** {info['capacity']:,} pessoas  \n"
-                                f"**🌿 Superfície:** {info['surface']}  ·  **🔲 Cobertura:** {info['roof']}"
-                            )
-                            if info.get("note"):
-                                st.info(info["note"], icon="ℹ️")
+                        if linhas:
+                            st.markdown("  \n".join(linhas))
+                        if info.get("scorers"):
+                            st.markdown(f"**⚽ Destaque:** {info['scorers']}")
+                        if info.get("note"):
+                            st.info(info["note"], icon="ℹ️")
                 else:
-                    st.caption(f"Match ID {mid_int} — informações do estádio não disponíveis na base local.")
+                    st.caption(f"Match ID {mid_int} — informações da partida não disponíveis na base local.")
 
         st.divider()
         st.subheader("Prévia dos dados")
@@ -425,9 +518,10 @@ with tab3:
         st.header("Análise Física — EPTS FIFA WC 2026")
 
         zone_cols = [v for v in SPEED_ZONES.values() if v in df.columns]
+        has_result = "Resultado" in df.columns and df["Resultado"].notna().any()
 
-        # ── filtro rápido de seleção/partida ─────────────────────────────────
-        fa, fb = st.columns(2)
+        # ── filtros ──────────────────────────────────────────────────────────
+        fa, fb, fc = st.columns(3)
         df_a = df.copy()
         if "Team Name" in df.columns:
             teams_a = ["Todas"] + sorted(df["Team Name"].dropna().unique().tolist())
@@ -439,9 +533,113 @@ with tab3:
             sel_m = fb.selectbox("Filtrar partida", match_a, key="an_match")
             if sel_m != "Todas":
                 df_a = df_a[df_a["Match ID"].astype(str) == sel_m]
+        if has_result:
+            res_opts = [r for r in RESULT_ORDER if r in df_a["Resultado"].dropna().unique()]
+            sel_r = fc.multiselect("Filtrar por resultado", res_opts, default=res_opts,
+                                   key="an_result")
+            if sel_r:
+                df_a = df_a[df_a["Resultado"].isin(sel_r)]
+
+        # opção de normalizar métricas por minuto jogado (comparação justa)
+        normalize = False
+        if "Total Duration (min)" in df_a.columns:
+            normalize = st.checkbox(
+                "📏 Normalizar distâncias por minuto jogado (intensidade — comparação mais justa entre quem jogou tempos diferentes)",
+                value=False,
+            )
+
+        def metric_series(frame, col):
+            """Retorna a coluna, opcionalmente dividida pelos minutos jogados."""
+            if normalize and "(m)" in col and "Total Duration (min)" in frame.columns:
+                dur = frame["Total Duration (min)"].replace(0, float("nan"))
+                return frame[col] / dur
+            return frame[col]
 
         st.divider()
         charts_pdf = []
+
+        # ════════════════════════════════════════════════════════════════════
+        # PERFIL FÍSICO POR RESULTADO (núcleo do app)
+        # ════════════════════════════════════════════════════════════════════
+        if has_result and df_a["Resultado"].notna().any():
+            st.subheader("🏆 Perfil físico por resultado da partida")
+            st.caption(
+                "Compara o comportamento físico de quem **venceu**, **empatou** e **perdeu**. "
+                "Cada jogador entra com o resultado da sua equipe na partida."
+            )
+
+            df_r = df_a[df_a["Resultado"].notna()].copy()
+            present = [r for r in RESULT_ORDER if r in df_r["Resultado"].unique()]
+
+            # KPIs lado a lado
+            kpi_cols = st.columns(len(present))
+            for col_box, res in zip(kpi_cols, present):
+                sub = df_r[df_r["Resultado"] == res]
+                with col_box:
+                    st.markdown(f"#### {res}")
+                    st.caption(f"{sub['Player Name'].nunique()} jogadores · "
+                               f"{sub['Team Name'].nunique()} equipe(s)")
+                    if "Total Distance (m)" in sub.columns:
+                        st.metric("Dist. média/jogador",
+                                  f"{metric_series(sub, 'Total Distance (m)').mean():,.0f}"
+                                  f"{' m/min' if normalize else ' m'}")
+                    if "Max Speed (km/h)" in sub.columns:
+                        st.metric("Vel. máx. média", f"{sub['Max Speed (km/h)'].mean():.1f} km/h")
+                    if "# Sprints" in sub.columns:
+                        st.metric("Sprints (média)", f"{sub['# Sprints'].mean():.1f}")
+
+            # comparativo por métrica escolhida
+            metric_r = st.selectbox(
+                "Métrica para comparar por resultado",
+                [c for c in NUMERIC_COLS if c in df_r.columns],
+                key="metric_result",
+            )
+            comp = df_r.copy()
+            comp["_val"] = metric_series(comp, metric_r)
+            agg = (comp.groupby("Resultado")["_val"].mean()
+                   .reindex(present).reset_index())
+            ylab = f"{metric_r}{' / min' if (normalize and '(m)' in metric_r) else ''}"
+            fig_res = px.bar(
+                agg, x="Resultado", y="_val", color="Resultado",
+                color_discrete_map=RESULT_COLORS,
+                title=f"Média de {ylab} por resultado",
+                labels={"_val": ylab},
+                text_auto=".1f",
+            )
+            fig_res.update_layout(showlegend=False, height=380)
+            st.plotly_chart(fig_res, use_container_width=True)
+            charts_pdf.append((f"Média de {metric_r} por resultado", None))
+
+            # perfil de zonas de velocidade por resultado (lado a lado)
+            if zone_cols:
+                rows = []
+                for res in present:
+                    sub = df_r[df_r["Resultado"] == res]
+                    for label, col in SPEED_ZONES.items():
+                        if col in sub.columns:
+                            rows.append({
+                                "Resultado": res,
+                                "Zona": label,
+                                "Média (m)": metric_series(sub, col).mean(),
+                            })
+                df_zone_res = pd.DataFrame(rows)
+                fig_zr = px.bar(
+                    df_zone_res, x="Zona", y="Média (m)", color="Resultado",
+                    color_discrete_map=RESULT_COLORS, barmode="group",
+                    title="Distância média por zona de velocidade — vencedores × perdedores",
+                )
+                fig_zr.update_xaxes(tickangle=-20)
+                fig_zr.update_layout(height=430, legend=dict(orientation="h", y=-0.35))
+                st.plotly_chart(fig_zr, use_container_width=True)
+                charts_pdf.append(("Zonas de velocidade por resultado", None))
+
+            # tabela-resumo de todas as métricas por resultado
+            with st.expander("📋 Ver tabela completa de médias por resultado"):
+                num_present = [c for c in NUMERIC_COLS if c in df_r.columns]
+                tabela = df_r.groupby("Resultado")[num_present].mean().reindex(present).round(1)
+                st.dataframe(tabela, use_container_width=True)
+
+            st.divider()
 
         # ── 1. Zonas de velocidade por jogador ───────────────────────────────
         if zone_cols and "Player Name" in df_a.columns:
@@ -505,11 +703,20 @@ with tab3:
         # ── 4. Dispersão velocidade máx × distância ───────────────────────────
         if {"Max Speed (km/h)", "Total Distance (m)", "Player Name"}.issubset(df_a.columns):
             st.subheader("🔵 Velocidade Máxima × Distância Total")
-            color_col = "Team Name" if "Team Name" in df_a.columns else None
+            cor_por = st.radio(
+                "Colorir por", ["Resultado", "Seleção"] if has_result else ["Seleção"],
+                horizontal=True, key="scat_color",
+            )
+            if cor_por == "Resultado" and has_result:
+                color_col, cmap = "Resultado", RESULT_COLORS
+            else:
+                color_col, cmap = ("Team Name" if "Team Name" in df_a.columns else None), None
+            hover_extra = [c for c in ["# Sprints", "Team Name", "Resultado"]
+                           if c in df_a.columns]
             fig_scat = px.scatter(
                 df_a, x="Total Distance (m)", y="Max Speed (km/h)",
-                color=color_col, hover_name="Player Name",
-                hover_data=["# Sprints"] if "# Sprints" in df_a.columns else None,
+                color=color_col, color_discrete_map=cmap, hover_name="Player Name",
+                hover_data=hover_extra,
                 title="Relação entre distância percorrida e velocidade máxima",
                 size="# Sprints" if "# Sprints" in df_a.columns else None,
                 size_max=18,
