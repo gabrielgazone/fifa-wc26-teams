@@ -103,3 +103,31 @@ def flag_url(team_name, width=40):
         return None
     meta = TEAM_META.get(str(team_name).strip().upper())
     return f"https://flagcdn.com/w{width}/{meta[1]}.png" if meta else None
+
+
+# coordenadas aproximadas (lat, lon) do país para o mapa-múndi
+TEAM_LATLON = {
+    "MEXICO": (23.6, -102.5), "SOUTH AFRICA": (-30.6, 22.9),
+    "KOREA REPUBLIC": (36.5, 127.8), "CZECHIA": (49.8, 15.5),
+    "CANADA": (56.1, -106.3), "BOSNIA AND HERZEGOVINA": (43.9, 17.7),
+    "QATAR": (25.4, 51.2), "SWITZERLAND": (46.8, 8.2),
+    "BRAZIL": (-14.2, -51.9), "HAITI": (18.9, -72.3),
+    "MOROCCO": (31.8, -7.1), "SCOTLAND": (56.5, -4.2),
+    "AUSTRALIA": (-25.3, 133.8), "PARAGUAY": (-23.4, -58.4),
+    "TÜRKIYE": (39.0, 35.2), "USA": (37.1, -95.7),
+    "CURAÇAO": (12.2, -69.0), "ECUADOR": (-1.8, -78.2),
+    "GERMANY": (51.2, 10.4), "CÔTE D'IVOIRE": (7.5, -5.5),
+    "JAPAN": (36.2, 138.3), "NETHERLANDS": (52.1, 5.3),
+    "SWEDEN": (60.1, 18.6), "TUNISIA": (33.9, 9.5),
+    "CABO VERDE": (16.0, -24.0), "SAUDI ARABIA": (23.9, 45.1),
+    "SPAIN": (40.5, -3.7), "URUGUAY": (-32.5, -55.8),
+    "BELGIUM": (50.5, 4.5), "EGYPT": (26.8, 30.8),
+    "IR IRAN": (32.4, 53.7), "NEW ZEALAND": (-40.9, 174.9),
+}
+
+
+def team_latlon(team_name):
+    """(lat, lon) aproximados do país, ou None."""
+    if team_name is None:
+        return None
+    return TEAM_LATLON.get(str(team_name).strip().upper())
