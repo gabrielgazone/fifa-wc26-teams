@@ -1511,9 +1511,11 @@ with tab_dest:
                                line=dict(color="white"), fillcolor="#2e8b57", layer="below")
                 figx.add_shape(type="line", x0=0, y0=50, x1=100, y1=50, line=dict(color="white"))
                 figx.add_shape(type="circle", x0=38, y0=38, x1=62, y1=62, line=dict(color="white"))
+                pcols = [c for c in ["Player Name", "Team Name", "Posição (nome)", xi_metric]
+                         if c in d.columns]
                 chosen = []
                 for pos, n in formation.items():
-                    pool = (d[d["Posição"] == pos][["Player Name", "Team Name", xi_metric]]
+                    pool = (d[d["Posição"] == pos][pcols]
                             .dropna(subset=[xi_metric]).nlargest(n, xi_metric))
                     for (xc, yc), (_, pl) in zip(coords[pos], pool.iterrows()):
                         chosen.append(pl)
@@ -1532,8 +1534,7 @@ with tab_dest:
                     plot_bgcolor="#2e8b57")
                 st.plotly_chart(figx, use_container_width=True)
                 if chosen:
-                    st.dataframe(pd.DataFrame(chosen)[["Player Name", "Team Name",
-                                 "Posição (nome)", xi_metric]].reset_index(drop=True),
+                    st.dataframe(pd.DataFrame(chosen)[pcols].reset_index(drop=True),
                                  hide_index=True, use_container_width=True)
 
         # ---- #8 MAPA-MÚNDI -------------------------------------------------
