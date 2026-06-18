@@ -976,14 +976,19 @@ with tab3:
                     cc, cmap = ("Team Name" if "Team Name" in df_a.columns else None), None
                 hov = [c for c in ["Team Name", "Resultado", "Posição (nome)", "# Sprints"]
                        if c in df_a.columns]
-                fig_s = px.scatter(df_a, x="Distância/min", y="Max Speed (km/h)",
-                                   color=cc, color_discrete_map=cmap,
-                                   hover_name="Player Name", hover_data=hov,
-                                   size="Sprint/min" if "Sprint/min" in df_a.columns else None,
-                                   size_max=18,
-                                   title="Intensidade (m/min) × Velocidade máxima")
-                st.plotly_chart(fig_s, use_container_width=True)
-                charts_pdf.append(("Intensidade × Velocidade máxima", None))
+                size_col = "Sprint/min" if "Sprint/min" in df_a.columns else None
+                need = ["Distância/min", "Max Speed (km/h)"] + ([size_col] if size_col else [])
+                ds = df_a.dropna(subset=need)
+                if ds.empty:
+                    st.info("Sem jogadores com dados suficientes para o gráfico.")
+                else:
+                    fig_s = px.scatter(ds, x="Distância/min", y="Max Speed (km/h)",
+                                       color=cc, color_discrete_map=cmap,
+                                       hover_name="Player Name", hover_data=hov,
+                                       size=size_col, size_max=18,
+                                       title="Intensidade (m/min) × Velocidade máxima")
+                    st.plotly_chart(fig_s, use_container_width=True)
+                    charts_pdf.append(("Intensidade × Velocidade máxima", None))
 
         # ===================================================================
         # TORNEIO (benchmark estilo FIFA — totais absolutos por equipe)
@@ -1116,12 +1121,13 @@ with tab3:
         # POR RESULTADO  (#1 intensidade · #2 alta intensidade · #3 teste · #10 distribuição)
         # ===================================================================
         with sub_tabs[2]:
-            if not has_result:
-                st.info("Sem informação de resultado para os dados carregados.")
+            df_r = df_a[df_a["Resultado"].notna()].copy() if has_result else pd.DataFrame()
+            present = ([r for r in RESULT_ORDER if r in df_r["Resultado"].unique()]
+                       if not df_r.empty else [])
+            if not present:
+                st.info("Nenhum jogador com resultado nos filtros atuais. "
+                        "Ajuste os filtros ou informe o placar na aba **Upload**.")
             else:
-                df_r = df_a[df_a["Resultado"].notna()].copy()
-                present = [r for r in RESULT_ORDER if r in df_r["Resultado"].unique()]
-
                 st.subheader("🏆 Perfil físico por resultado")
                 st.caption("Cada jogador entra com o resultado da equipe na partida. "
                            "Métricas em intensidade (por minuto).")
@@ -1278,7 +1284,9 @@ with tab3:
             if {"m por sprint", "# Sprints", "Sprint (m)"}.issubset(df_a.columns):
                 st.caption("Metros por sprint = comprimento típico do sprint (qualidade) "
                            "vs. número de sprints (quantidade).")
-                fig_eff = px.scatter(df_a, x="# Sprints", y="m por sprint",
+                de = df_a.dropna(subset=["# Sprints", "m por sprint", "Sprint (m)"])
+                de = de[de["Sprint (m)"] >= 0]
+                fig_eff = px.scatter(de, x="# Sprints", y="m por sprint",
                                      color="Posição (nome)" if has_position else None,
                                      hover_name="Player Name", size="Sprint (m)", size_max=18,
                                      title="Quantidade × comprimento dos sprints")
@@ -1816,7 +1824,7 @@ with tab_dest:
                                  title="Alta intensidade ≥20 km/h (m)")
                     fig.update_layout(showlegend=False, height=420)
                     st.plotly_chart(fig, use_container_width=True)
-                elif step == 4 and "Distância/min" in dm:
+                elif step == 4 and "Distância/min" in dm and teams_m:
                     st.markdown("#### Destaques físicos")
                     cols = st.columns(len(teams_m))
                     for box, tm_ in zip(cols, teams_m):
