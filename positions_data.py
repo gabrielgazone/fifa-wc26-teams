@@ -42,6 +42,23 @@ _RAW = {
     "EGYPT":                   "GK DF DF DF DF DF FW MF FW FW MF FW DF MF DF GK MF MF MF FW MF FW GK DF FW GK",
     "IR IRAN":                 "GK DF DF DF DF MF MF MF FW FW FW GK DF MF MF MF DF FW DF FW MF GK DF FW DF MF",
     "NEW ZEALAND":             "GK DF DF DF DF MF FW MF FW MF MF GK DF MF DF DF FW FW MF MF FW GK MF DF MF DF",
+    # ── grupos I–L (2ª leva de partidas) ──
+    "FRANCE":                  "GK DF DF DF DF MF FW MF FW FW FW FW MF MF DF GK DF MF DF FW DF FW GK MF MF DF",
+    "IRAQ":                    "GK DF DF DF DF DF MF MF FW FW FW GK FW MF DF MF FW FW MF MF FW GK DF MF DF DF",
+    "NORWAY":                  "GK MF DF DF DF MF FW MF FW MF FW GK GK MF DF DF DF MF MF MF MF MF MF DF DF DF",
+    "SENEGAL":                 "GK DF DF DF MF MF FW MF FW FW FW FW FW DF DF GK MF FW DF FW MF MF GK DF DF MF",
+    "ALGERIA":                 "GK DF DF DF DF MF FW MF FW MF FW FW DF MF DF GK DF FW MF FW DF MF GK MF FW DF",
+    "ARGENTINA":               "GK DF DF DF MF DF MF MF FW FW MF GK DF MF MF FW FW FW DF MF FW FW GK MF DF DF",
+    "AUSTRIA":                 "GK DF DF MF DF MF FW DF MF MF FW GK GK FW DF DF MF MF MF MF FW MF DF MF DF MF",
+    "JORDAN":                  "GK DF DF DF DF MF FW MF FW FW FW GK FW MF MF DF DF MF DF MF MF GK DF FW MF DF",
+    "COLOMBIA":                "GK DF DF DF MF MF FW MF FW MF MF GK DF DF MF MF DF DF FW MF FW DF DF GK FW FW",
+    "CONGO DR":                "GK DF DF DF DF MF MF MF FW MF FW DF FW MF MF GK FW MF FW FW GK DF FW DF MF DF",
+    "PORTUGAL":                "GK DF DF DF DF MF FW MF FW MF FW GK DF DF MF FW FW FW FW DF MF GK MF DF DF FW",
+    "UZBEKISTAN":              "GK DF DF DF DF MF MF MF MF MF MF GK DF FW DF GK MF DF MF FW FW MF MF DF DF DF",
+    "CROATIA":                 "GK DF DF DF DF DF MF MF FW MF FW GK MF FW MF MF MF DF MF FW MF DF GK FW DF FW",
+    "ENGLAND":                 "GK DF DF MF DF DF FW MF FW MF FW DF GK MF DF MF MF FW FW FW MF FW GK DF DF DF",
+    "GHANA":                   "GK DF MF DF MF DF FW MF FW FW MF GK FW DF MF GK DF DF FW MF DF FW DF FW FW DF",
+    "PANAMA":                  "GK DF DF DF DF MF MF MF FW MF MF GK DF DF DF DF FW FW MF MF MF GK DF FW DF DF",
 }
 
 # {TEAM_NAME: {jersey_number: position}}
@@ -60,7 +77,7 @@ def get_position(team_name, jersey):
     """Retorna GK/DF/MF/FW para (seleção, camisa), ou None se não encontrado."""
     if team_name is None or jersey is None:
         return None
-    team = str(team_name).strip().upper()
+    team = canon(team_name)
     try:
         j = int(float(jersey))
     except (ValueError, TypeError):
@@ -86,22 +103,43 @@ TEAM_META = {
     "SPAIN": ("ESP", "es"), "URUGUAY": ("URU", "uy"),
     "BELGIUM": ("BEL", "be"), "EGYPT": ("EGY", "eg"),
     "IR IRAN": ("IRN", "ir"), "NEW ZEALAND": ("NZL", "nz"),
+    "FRANCE": ("FRA", "fr"), "IRAQ": ("IRQ", "iq"), "NORWAY": ("NOR", "no"),
+    "SENEGAL": ("SEN", "sn"), "ALGERIA": ("ALG", "dz"), "ARGENTINA": ("ARG", "ar"),
+    "AUSTRIA": ("AUT", "at"), "JORDAN": ("JOR", "jo"), "COLOMBIA": ("COL", "co"),
+    "CONGO DR": ("COD", "cd"), "PORTUGAL": ("POR", "pt"), "UZBEKISTAN": ("UZB", "uz"),
+    "CROATIA": ("CRO", "hr"), "ENGLAND": ("ENG", "gb-eng"), "GHANA": ("GHA", "gh"),
+    "PANAMA": ("PAN", "pa"),
 }
+
+# variantes de grafia que mapeiam para a chave canônica usada acima
+ALIASES = {
+    "DR CONGO": "CONGO DR", "CONGO": "CONGO DR", "RD CONGO": "CONGO DR",
+    "SOUTH KOREA": "KOREA REPUBLIC", "KOREA": "KOREA REPUBLIC",
+    "CZECH REPUBLIC": "CZECHIA", "IRAN": "IR IRAN", "TURKEY": "TÜRKIYE",
+    "TURKIYE": "TÜRKIYE", "IVORY COAST": "CÔTE D'IVOIRE", "COTE D'IVOIRE": "CÔTE D'IVOIRE",
+    "CURACAO": "CURAÇAO", "CAPE VERDE": "CABO VERDE", "UNITED STATES": "USA",
+}
+
+
+def canon(team_name):
+    """Normaliza o nome da seleção para a grafia canônica do app."""
+    if team_name is None:
+        return None
+    up = str(team_name).strip().upper()
+    return ALIASES.get(up, up)
 
 
 def team_code(team_name):
     """Sigla de 3 letras (ex.: 'AUSTRALIA' -> 'AUS'). Fallback: 3 primeiras letras."""
     if team_name is None:
         return "?"
-    meta = TEAM_META.get(str(team_name).strip().upper())
+    meta = TEAM_META.get(canon(team_name))
     return meta[0] if meta else str(team_name).strip().upper()[:3]
 
 
 def flag_url(team_name, width=40):
     """URL da bandeira (flagcdn) para a seleção, ou None se desconhecida."""
-    if team_name is None:
-        return None
-    meta = TEAM_META.get(str(team_name).strip().upper())
+    meta = TEAM_META.get(canon(team_name))
     return f"https://flagcdn.com/w{width}/{meta[1]}.png" if meta else None
 
 
@@ -123,11 +161,15 @@ TEAM_LATLON = {
     "SPAIN": (40.5, -3.7), "URUGUAY": (-32.5, -55.8),
     "BELGIUM": (50.5, 4.5), "EGYPT": (26.8, 30.8),
     "IR IRAN": (32.4, 53.7), "NEW ZEALAND": (-40.9, 174.9),
+    "FRANCE": (46.2, 2.2), "IRAQ": (33.2, 43.7), "NORWAY": (60.5, 8.5),
+    "SENEGAL": (14.5, -14.5), "ALGERIA": (28.0, 1.7), "ARGENTINA": (-38.4, -63.6),
+    "AUSTRIA": (47.5, 14.6), "JORDAN": (30.6, 36.2), "COLOMBIA": (4.6, -74.3),
+    "CONGO DR": (-4.0, 21.8), "PORTUGAL": (39.4, -8.2), "UZBEKISTAN": (41.4, 64.6),
+    "CROATIA": (45.1, 15.2), "ENGLAND": (52.4, -1.5), "GHANA": (7.9, -1.0),
+    "PANAMA": (8.5, -80.8),
 }
 
 
 def team_latlon(team_name):
     """(lat, lon) aproximados do país, ou None."""
-    if team_name is None:
-        return None
-    return TEAM_LATLON.get(str(team_name).strip().upper())
+    return TEAM_LATLON.get(canon(team_name))

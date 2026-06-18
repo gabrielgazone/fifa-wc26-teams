@@ -9,7 +9,7 @@ from datetime import datetime
 
 from positions_data import (
     get_position, POSITION_LABELS, POSITION_ORDER,
-    team_code, flag_url, team_latlon,
+    team_code, flag_url, team_latlon, canon,
 )
 
 # ── configuração da página ────────────────────────────────────────────────────
@@ -56,59 +56,64 @@ st.markdown(
 
 # ── banco de dados de partidas / estádios WC 2026 ────────────────────────────
 # Fonte: FIFA.com + beIN Sports + CBC News (consultado jun/2026)
-MATCH_DB = {
-    # ── 11/06 ──
-    151600: {"home": "MEXICO", "away": "SOUTH AFRICA", "home_goals": 2, "away_goals": 0,
-             "score": "2–0", "date": "11/06/2026", "round": "Fase de Grupos",
-             "stadium": "Estadio Azteca (Mexico City Stadium)", "city": "Cidade do México",
-             "country": "México", "capacity": 80_824,
-             "scorers": "Jogo de abertura da Copa do Mundo 2026.",
-             "note": "Estádio de abertura — único a sediar 3 Copas (1970, 1986, 2026)."},
-    151608: {"home": "KOREA REPUBLIC", "away": "CZECHIA", "home_goals": 2, "away_goals": 1,
-             "score": "2–1", "date": "11/06/2026", "round": "Fase de Grupos"},
-    # ── 12/06 ──
-    151614: {"home": "CANADA", "away": "BOSNIA AND HERZEGOVINA", "home_goals": 1, "away_goals": 1,
-             "score": "1–1", "date": "12/06/2026", "round": "Fase de Grupos",
-             "stadium": "BMO Field (Toronto Stadium)", "city": "Toronto", "country": "Canadá",
-             "capacity": 45_736},
-    151625: {"home": "USA", "away": "PARAGUAY", "home_goals": 4, "away_goals": 1,
-             "score": "4–1", "date": "12/06/2026", "round": "Fase de Grupos"},
-    # ── 13/06 ──
-    151619: {"home": "HAITI", "away": "SCOTLAND", "home_goals": 0, "away_goals": 1,
-             "score": "0–1", "date": "13/06/2026", "round": "Fase de Grupos"},
-    151626: {"home": "AUSTRALIA", "away": "TÜRKIYE", "home_goals": 2, "away_goals": 0,
-             "score": "2–0", "date": "13/06/2026", "group": "D", "round": "Fase de Grupos",
-             "stadium": "BC Place (Vancouver Stadium)", "city": "Vancouver",
-             "country": "Canadá", "capacity": 48_821,
-             "surface": "Grama natural", "roof": "Teto retrátil",
-             "scorers": "Irankunda 27', Metcalfe 75' (AUS) · GK Patrick Beach: 8 defesas",
-             "note": "Único estádio do torneio com Final da Copa do Mundo Feminina (2015). "
-                     "Inaugurado em 1983; maior cobertura retrátil do tipo no mundo."},
-    151620: {"home": "BRAZIL", "away": "MOROCCO", "home_goals": 1, "away_goals": 1,
-             "score": "1–1", "date": "13/06/2026", "round": "Fase de Grupos"},
-    151613: {"home": "QATAR", "away": "SWITZERLAND", "home_goals": 1, "away_goals": 1,
-             "score": "1–1", "date": "13/06/2026", "round": "Fase de Grupos"},
-    # ── 14/06 ──
-    151632: {"home": "CÔTE D'IVOIRE", "away": "ECUADOR", "home_goals": 1, "away_goals": 0,
-             "score": "1–0", "date": "14/06/2026", "round": "Fase de Grupos"},
-    151631: {"home": "GERMANY", "away": "CURAÇAO", "home_goals": 7, "away_goals": 1,
-             "score": "7–1", "date": "14/06/2026", "round": "Fase de Grupos",
-             "note": "Maior goleada da primeira rodada."},
-    151638: {"home": "NETHERLANDS", "away": "JAPAN", "home_goals": 2, "away_goals": 2,
-             "score": "2–2", "date": "14/06/2026", "round": "Fase de Grupos"},
-    151637: {"home": "SWEDEN", "away": "TUNISIA", "home_goals": 5, "away_goals": 1,
-             "score": "5–1", "date": "14/06/2026", "round": "Fase de Grupos"},
-    # ── 15/06 ──
-    151650: {"home": "SAUDI ARABIA", "away": "URUGUAY", "home_goals": 1, "away_goals": 1,
-             "score": "1–1", "date": "15/06/2026", "round": "Fase de Grupos"},
-    151649: {"home": "SPAIN", "away": "CABO VERDE", "home_goals": 0, "away_goals": 0,
-             "score": "0–0", "date": "15/06/2026", "round": "Fase de Grupos",
-             "note": "Cabo Verde segurou os campeões europeus num dia histórico de 4 empates."},
-    151644: {"home": "IR IRAN", "away": "NEW ZEALAND", "home_goals": 2, "away_goals": 2,
-             "score": "2–2", "date": "15/06/2026", "round": "Fase de Grupos"},
-    151643: {"home": "BELGIUM", "away": "EGYPT", "home_goals": 1, "away_goals": 1,
-             "score": "1–1", "date": "15/06/2026", "round": "Fase de Grupos"},
-}
+def _M(a, ga, b, gb, date, **extra):
+    """Cria a entrada de uma partida (chave = par de seleções, não Match ID)."""
+    e = {"teams": (a, b), "goals": {canon(a): ga, canon(b): gb},
+         "score": f"{ga}–{gb}", "date": date, "round": "Fase de Grupos"}
+    e.update(extra)
+    return e
+
+
+# Resultados conhecidos. A chave é o PAR de seleções — independe do Match ID,
+# então qualquer arquivo novo (rodadas futuras) funciona sem mexer no código.
+# Fonte: FIFA.com, ESPN, CBS, Yahoo, Olympics.com, Al Jazeera (jun/2026).
+MATCHES = [
+    # rodada 1 — grupos A–H
+    _M("MEXICO", 2, "SOUTH AFRICA", 0, "11/06/2026",
+       stadium="Estadio Azteca (Mexico City Stadium)", city="Cidade do México",
+       country="México", capacity=80_824,
+       note="Estádio de abertura — único a sediar 3 Copas (1970, 1986, 2026)."),
+    _M("KOREA REPUBLIC", 2, "CZECHIA", 1, "11/06/2026"),
+    _M("CANADA", 1, "BOSNIA AND HERZEGOVINA", 1, "12/06/2026",
+       stadium="BMO Field (Toronto Stadium)", city="Toronto", country="Canadá",
+       capacity=45_736),
+    _M("USA", 4, "PARAGUAY", 1, "12/06/2026"),
+    _M("HAITI", 0, "SCOTLAND", 1, "13/06/2026"),
+    _M("AUSTRALIA", 2, "TÜRKIYE", 0, "13/06/2026", group="D",
+       stadium="BC Place (Vancouver Stadium)", city="Vancouver", country="Canadá",
+       capacity=48_821, surface="Grama natural", roof="Teto retrátil",
+       scorers="Irankunda 27', Metcalfe 75' (AUS) · GK Patrick Beach: 8 defesas",
+       note="Único estádio do torneio com Final da Copa Feminina (2015)."),
+    _M("BRAZIL", 1, "MOROCCO", 1, "13/06/2026"),
+    _M("QATAR", 1, "SWITZERLAND", 1, "13/06/2026"),
+    _M("CÔTE D'IVOIRE", 1, "ECUADOR", 0, "14/06/2026"),
+    _M("GERMANY", 7, "CURAÇAO", 1, "14/06/2026", note="Maior goleada da 1ª rodada."),
+    _M("NETHERLANDS", 2, "JAPAN", 2, "14/06/2026"),
+    _M("SWEDEN", 5, "TUNISIA", 1, "14/06/2026"),
+    _M("SAUDI ARABIA", 1, "URUGUAY", 1, "15/06/2026"),
+    _M("SPAIN", 0, "CABO VERDE", 0, "15/06/2026",
+       note="Cabo Verde segurou os campeões europeus num dia histórico de 4 empates."),
+    _M("IR IRAN", 2, "NEW ZEALAND", 2, "15/06/2026"),
+    _M("BELGIUM", 1, "EGYPT", 1, "15/06/2026"),
+    # rodada 1 — grupos I–L
+    _M("FRANCE", 3, "SENEGAL", 1, "16/06/2026"),
+    _M("NORWAY", 4, "IRAQ", 1, "16/06/2026"),
+    _M("ARGENTINA", 3, "ALGERIA", 0, "16/06/2026"),
+    _M("AUSTRIA", 3, "JORDAN", 1, "16/06/2026"),
+    _M("PORTUGAL", 1, "CONGO DR", 1, "17/06/2026"),
+    _M("COLOMBIA", 3, "UZBEKISTAN", 1, "17/06/2026"),
+    _M("ENGLAND", 4, "CROATIA", 2, "17/06/2026"),
+    _M("GHANA", 1, "PANAMA", 0, "18/06/2026"),
+]
+
+# índice por par de seleções (canônico)
+RESULTS = {frozenset(e["goals"].keys()): e for e in MATCHES}
+
+
+def result_for(*teams):
+    """Entrada da partida pelo par de seleções (qualquer ordem/grafia)."""
+    key = frozenset(canon(t) for t in teams if t is not None)
+    return RESULTS.get(key)
 
 STADIUM_DB = {
     "BC Place (Vancouver Stadium)": {
@@ -233,28 +238,50 @@ RESULT_ORDER = ["Vitória", "Empate", "Derrota"]
 RESULT_COLORS = {"Vitória": "#2e9e4f", "Empate": "#f5c518", "Derrota": "#e53935"}
 
 
+def manual_key(a, b):
+    """Chave estável para um par de seleções (independe da ordem)."""
+    return "|".join(sorted([canon(a), canon(b)]))
+
+
+def teams_of_match(df, mid):
+    """Seleções presentes em uma partida, na ordem em que aparecem nos dados."""
+    sub = df[df["Match ID"] == mid]
+    return list(dict.fromkeys(sub["Team Name"].dropna().tolist()))
+
+
+def match_entry(df, mid):
+    """Entrada de resultado (conhecida OU manual) para a partida `mid`."""
+    teams = teams_of_match(df, mid)
+    if len(teams) < 2:
+        return None, teams
+    manual = st.session_state.get("manual_results", {})
+    entry = manual.get(manual_key(teams[0], teams[1])) or result_for(teams[0], teams[1])
+    return entry, teams
+
+
 def enrich_results(df: pd.DataFrame) -> pd.DataFrame:
-    """Cruza Team Name + Match ID com MATCH_DB para anexar o resultado da
-    partida a cada jogador (vitória/empate/derrota, gols, adversário)."""
+    """Anexa o resultado a cada jogador descobrindo o adversário a partir dos
+    PRÓPRIOS dados (as 2 seleções da partida) e buscando o placar pelo par de
+    seleções — conhecido ou informado manualmente. Funciona para qualquer
+    arquivo novo, sem depender de Match ID cadastrado."""
     if "Match ID" not in df.columns or "Team Name" not in df.columns:
         return df
     df = df.copy()
+    match_teams = {mid: teams_of_match(df, mid)
+                   for mid in df["Match ID"].dropna().unique()}
+    manual = st.session_state.get("manual_results", {})
 
     def outcome(row):
-        try:
-            info = MATCH_DB.get(int(row["Match ID"]))
-        except (ValueError, TypeError):
-            info = None
-        if not info:
+        team = row["Team Name"]
+        teams = match_teams.get(row["Match ID"], [])
+        opp = next((t for t in teams if canon(t) != canon(team)), None)
+        if opp is None:
             return pd.Series([pd.NA] * len(RESULT_COLS), index=RESULT_COLS)
-        team = str(row["Team Name"]).strip().upper()
-        home, away = info["home"].strip().upper(), info["away"].strip().upper()
-        hg, ag = info["home_goals"], info["away_goals"]
-        if team == home:
-            gf, ga, opp = hg, ag, info["away"]
-        elif team == away:
-            gf, ga, opp = ag, hg, info["home"]
-        else:
+        entry = manual.get(manual_key(team, opp)) or result_for(team, opp)
+        if not entry:
+            return pd.Series([pd.NA] * len(RESULT_COLS), index=RESULT_COLS)
+        gf, ga = entry["goals"].get(canon(team)), entry["goals"].get(canon(opp))
+        if gf is None or ga is None:
             return pd.Series([pd.NA] * len(RESULT_COLS), index=RESULT_COLS)
         if gf > ga:
             res, pts = "Vitória", 3
@@ -715,39 +742,71 @@ with tab1:
             match_ids = df["Match ID"].dropna().unique().tolist()
             st.divider()
             st.subheader("🏟️ Informações das partidas")
+            com_result = sum(1 for mid in match_ids if match_entry(df, mid)[0])
+            st.caption(f"{com_result} de {len(match_ids)} partidas com resultado cadastrado.")
+            sem_result = []
             for mid in match_ids:
-                mid_int = int(mid) if str(mid).isdigit() else mid
-                info = MATCH_DB.get(mid_int)
-                if info:
-                    grp = f" — Grupo {info['group']}" if info.get("group") else ""
+                entry, teams = match_entry(df, mid)
+                if entry:
+                    a, b = entry.get("teams", (teams + ["?", "?"])[:2])
+                    grp = f" — Grupo {entry['group']}" if entry.get("group") else ""
                     with st.container(border=True):
-                        st.markdown(f"### {info['home']} {info['score']} {info['away']}")
-                        st.caption(
-                            f"📅 {info.get('date', '—')}  ·  "
-                            f"{info.get('round', 'Fase de Grupos')}{grp}  ·  Match ID: {mid_int}"
-                        )
+                        st.markdown(f"### {a} {entry.get('score', '')} {b}")
+                        st.caption(f"📅 {entry.get('date', '—')}  ·  "
+                                   f"{entry.get('round', 'Fase de Grupos')}{grp}  ·  "
+                                   f"Match ID: {mid}")
                         linhas = []
-                        if info.get("stadium"):
-                            linhas.append(f"**🏟️ Estádio:** {info['stadium']}")
-                        if info.get("city"):
-                            linhas.append(
-                                f"**📍 Cidade:** {info['city']}, {info.get('country', '')}".rstrip(", ")
-                            )
-                        if info.get("capacity"):
-                            linhas.append(f"**👥 Capacidade:** {info['capacity']:,} pessoas")
-                        if info.get("surface"):
-                            linhas.append(
-                                f"**🌿 Superfície:** {info['surface']}  ·  "
-                                f"**🔲 Cobertura:** {info.get('roof', '—')}"
-                            )
+                        if entry.get("stadium"):
+                            linhas.append(f"**🏟️ Estádio:** {entry['stadium']}")
+                        if entry.get("city"):
+                            linhas.append(f"**📍 Cidade:** {entry['city']}, "
+                                          f"{entry.get('country', '')}".rstrip(", "))
+                        if entry.get("capacity"):
+                            linhas.append(f"**👥 Capacidade:** {entry['capacity']:,} pessoas")
+                        if entry.get("surface"):
+                            linhas.append(f"**🌿 Superfície:** {entry['surface']}  ·  "
+                                          f"**🔲 Cobertura:** {entry.get('roof', '—')}")
                         if linhas:
                             st.markdown("  \n".join(linhas))
-                        if info.get("scorers"):
-                            st.markdown(f"**⚽ Destaque:** {info['scorers']}")
-                        if info.get("note"):
-                            st.info(info["note"], icon="ℹ️")
+                        if entry.get("scorers"):
+                            st.markdown(f"**⚽ Destaque:** {entry['scorers']}")
+                        if entry.get("note"):
+                            st.info(entry["note"], icon="ℹ️")
                 else:
-                    st.caption(f"Match ID {mid_int} — informações da partida não disponíveis na base local.")
+                    sem_result.append((mid, teams))
+                    lbl = " × ".join(team_code(t) for t in teams) if teams else str(mid)
+                    with st.container(border=True):
+                        st.markdown(f"### {lbl}")
+                        st.caption(f"Match ID: {mid} — resultado ainda não cadastrado")
+
+            # ── entrada manual de resultados (rodadas novas) ──────────────
+            if sem_result:
+                st.divider()
+                st.subheader("✍️ Informar placar de partidas novas")
+                st.caption("Para jogos que o app ainda não conhece (rodadas seguintes, "
+                           "mata-mata). Informar o placar habilita todas as análises por "
+                           "resultado. As métricas físicas já funcionam mesmo sem o placar.")
+                st.session_state.setdefault("manual_results", {})
+                for mid, teams in sem_result:
+                    if len(teams) < 2:
+                        st.caption(f"Match ID {mid}: só uma seleção nos dados — não dá "
+                                   "para inferir o confronto.")
+                        continue
+                    a, b = teams[0], teams[1]
+                    with st.form(f"mr_{mid}"):
+                        st.markdown(f"**{a} × {b}**")
+                        cga, cgb = st.columns(2)
+                        ga = cga.number_input(f"Gols {team_code(a)}", 0, 30, 0, key=f"ga_{mid}")
+                        gb = cgb.number_input(f"Gols {team_code(b)}", 0, 30, 0, key=f"gb_{mid}")
+                        if st.form_submit_button("💾 Salvar resultado"):
+                            st.session_state.manual_results[manual_key(a, b)] = {
+                                "teams": (a, b),
+                                "goals": {canon(a): int(ga), canon(b): int(gb)},
+                                "score": f"{int(ga)}–{int(gb)}", "date": "",
+                                "round": "Fase de Grupos"}
+                            st.session_state.df = enrich_results(st.session_state.df)
+                            st.success(f"Resultado {a} {int(ga)}–{int(gb)} {b} salvo!")
+                            st.rerun()
 
         st.divider()
         st.subheader("Prévia dos dados")
@@ -1387,8 +1446,11 @@ with tab_dest:
         full = all(c in d.columns for c in SPEED_ZONES.values())
 
         def match_label(mid):
-            info = MATCH_DB.get(int(mid)) if str(mid).split(".")[0].isdigit() else None
-            return f"{info['home']} {info.get('score','')} {info['away']}" if info else str(mid)
+            entry, teams = match_entry(d, mid)
+            if entry:
+                a, b = entry.get("teams", (teams + ["?", "?"])[:2])
+                return f"{a} {entry.get('score', '')} {b}"
+            return " × ".join(team_code(t) for t in teams) if teams else str(mid)
 
         dsub = st.tabs([
             "📝 Scout Report", "🧬 DNA & Confronto", "🆚 Comparador", "⭐ XI ideal",
@@ -1649,9 +1711,14 @@ with tab_dest:
                 pick = st.selectbox("Métrica", list(bm_lbl), key="bump_metric")
                 col = bm_lbl[pick]
                 tt = tt.copy()
-                tt["data"] = tt["Match ID"].map(
-                    lambda m: MATCH_DB.get(int(m), {}).get("date"))
+                date_map = {mid: (match_entry(d, mid)[0] or {}).get("date")
+                            for mid in tt["Match ID"].unique()}
+                tt["data"] = tt["Match ID"].map(date_map)
                 tt["data"] = pd.to_datetime(tt["data"], format="%d/%m/%Y", errors="coerce")
+                # quem não tem data cai para a ordem do Match ID
+                tt["data"] = tt["data"].fillna(
+                    pd.to_datetime("2026-01-01") + pd.to_timedelta(
+                        tt["Match ID"].rank(method="dense").fillna(0), unit="D"))
                 tt = tt.sort_values(["Team Name", "data"])
                 tt["jogo"] = tt.groupby("Team Name").cumcount() + 1
                 tt["acum"] = tt.groupby("Team Name")[col].transform(
@@ -1719,7 +1786,7 @@ with tab_dest:
             else:
                 mids = sorted(d["Match ID"].dropna().unique())
                 mid = st.selectbox("Partida", mids, format_func=match_label, key="story_mid")
-                info = MATCH_DB.get(int(mid)) if str(mid).split(".")[0].isdigit() else None
+                info, _ = match_entry(d, mid)
                 dm = d[d["Match ID"] == mid]
                 teams_m = dm["Team Name"].dropna().unique().tolist()
                 step = st.radio("Tela", [1, 2, 3, 4, 5], horizontal=True,
@@ -1727,7 +1794,8 @@ with tab_dest:
 
                 if step == 1:
                     if info:
-                        st.markdown(f"## {info['home']} {info.get('score','')} {info['away']}")
+                        a, b = info.get("teams", (teams_m + ["?", "?"])[:2])
+                        st.markdown(f"## {a} {info.get('score','')} {b}")
                         st.caption(f"📅 {info.get('date','')} · {info.get('round','')}")
                         if info.get("scorers"):
                             st.markdown(f"**⚽ {info['scorers']}**")
