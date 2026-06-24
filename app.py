@@ -967,16 +967,28 @@ with tab3:
                        "(totais absolutos da equipe, no estilo do benchmark da FIFA).")
 
             if full_zones and "Player Name" in df_a.columns:
-                st.subheader("🏃 Zonas de velocidade por jogador (top 30 em distância)")
-                dz = df_a.sort_values("Total Distance (m)", ascending=False).head(30)
+                # agrega por jogador (MÉDIA por jogo) — evita somar partidas do
+                # mesmo nome no eixo X (que dava distâncias impossíveis >20 km)
+                ngames = (df_a.groupby("Player Name")["Match ID"].nunique()
+                          if "Match ID" in df_a.columns else None)
+                multi = ngames is not None and ngames.max() > 1
+                st.subheader("🏃 Zonas de velocidade por jogador"
+                             + (" — média por jogo (top 30)" if multi else " (top 30)"))
+                zmean = df_a.groupby("Player Name")[zone_cols].mean()
+                zmean["_tot"] = zmean.sum(axis=1)
+                dz = zmean.sort_values("_tot", ascending=False).head(30).reset_index()
                 fig_zones = go.Figure()
                 for (label, col), color in zip(SPEED_ZONES.items(), ZONE_COLORS):
                     fig_zones.add_trace(go.Bar(name=label, x=dz["Player Name"],
                                                y=dz[col], marker_color=color))
-                fig_zones.update_layout(barmode="stack", xaxis_tickangle=-45,
-                                        yaxis_title="Metros",
-                                        legend=dict(orientation="h", y=-0.4), height=520)
+                fig_zones.update_layout(
+                    barmode="stack", xaxis_tickangle=-45,
+                    yaxis_title="Metros (média por jogo)" if multi else "Metros",
+                    legend=dict(orientation="h", y=-0.4), height=520)
                 st.plotly_chart(fig_zones, use_container_width=True)
+                if multi:
+                    st.caption("Jogadores com mais de uma partida entram com a **média por jogo** "
+                               "(não a soma) — por isso nenhuma barra passa de ~13 km.")
                 charts_pdf.append(("Zonas de velocidade por jogador", None))
 
             st.subheader("🏅 Rankings")
@@ -1656,10 +1668,14 @@ with tab_dest:
                 figx.add_shape(type="circle", x0=38, y0=38, x1=62, y1=62, line=dict(color="white"))
                 pcols = [c for c in ["Player Name", "Team Name", "Posição (nome)", xi_metric]
                          if c in d.columns]
+                gcols = [c for c in ["Player Name", "Team Name", "Posição", "Posição (nome)"]
+                         if c in d.columns]
+                # 1 linha por jogador (média por jogo) p/ ninguém aparecer 2x
+                xi_base = (d.dropna(subset=[xi_metric, "Posição"])
+                           .groupby(gcols, as_index=False)[xi_metric].mean())
                 chosen = []
                 for pos, n in formation.items():
-                    pool = (d[d["Posição"] == pos][pcols]
-                            .dropna(subset=[xi_metric]).nlargest(n, xi_metric))
+                    pool = xi_base[xi_base["Posição"] == pos].nlargest(n, xi_metric)
                     for (xc, yc), (_, pl) in zip(coords[pos], pool.iterrows()):
                         chosen.append(pl)
                         figx.add_trace(go.Scatter(
