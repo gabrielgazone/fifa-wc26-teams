@@ -1750,10 +1750,26 @@ with tab_dest:
                     lambda s: s.expanding().mean())
                 tt["rank"] = tt.groupby("jogo")["acum"].rank(ascending=False, method="min")
                 figbump = px.line(tt, x="jogo", y="rank", color="Team Name",
-                                  markers=True, hover_name="Team Name",
+                                  markers=False, hover_name="Team Name",
                                   title=f"Ranking acumulado — {pick}")
-                figbump.update_yaxes(autorange="reversed", title="Posição no ranking")
-                figbump.update_xaxes(title="Jogo da seleção", dtick=1)
+                jmin, jmax = tt["jogo"].min(), tt["jogo"].max()
+                nrank = tt["rank"].max()
+                # eixos com folga p/ as bandeiras não cortarem nas bordas
+                figbump.update_xaxes(title="Jogo da seleção", dtick=1,
+                                     range=[jmin - 0.35, jmax + 0.35])
+                figbump.update_yaxes(title="Posição no ranking",
+                                     range=[nrank + 0.6, 0.4])  # invertido (1 no topo)
+                # bandeira de cada seleção em cada ponto (no lugar do marcador)
+                xspan = max(jmax - jmin, 1)
+                yspan = max(nrank - tt["rank"].min(), 1)
+                sx, sy = xspan * 0.05, yspan * 0.06
+                for _, r in tt.iterrows():
+                    url = flag_url(r["Team Name"])
+                    if url:
+                        figbump.add_layout_image(dict(
+                            source=url, x=r["jogo"], y=r["rank"],
+                            sizex=sx, sizey=sy, xref="x", yref="y",
+                            xanchor="center", yanchor="middle", layer="above"))
                 figbump.update_layout(height=560, showlegend=(tt["Team Name"].nunique() <= 12))
                 st.plotly_chart(figbump, use_container_width=True)
                 if tt["jogo"].max() == 1:
