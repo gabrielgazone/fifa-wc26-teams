@@ -1772,8 +1772,10 @@ with tab_dest:
                                      range=[nrank + 0.6, 0.4])  # invertido (1 no topo)
                 # bandeira de cada seleção em cada ponto (no lugar do marcador)
                 xspan = max(jmax - jmin, 1)
-                yspan = max(nrank - tt["rank"].min(), 1)
-                sx, sy = xspan * 0.05, yspan * 0.06
+                nteams = tt["Team Name"].nunique()
+                # altura da bandeira = fração de UMA posição (não do span todo),
+                # para nunca sobrepor as vizinhas
+                sx, sy = xspan * 0.045, 0.85
                 for _, r in tt.iterrows():
                     url = flag_url(r["Team Name"])
                     if url:
@@ -1781,7 +1783,9 @@ with tab_dest:
                             source=url, x=r["jogo"], y=r["rank"],
                             sizex=sx, sizey=sy, xref="x", yref="y",
                             xanchor="center", yanchor="middle", layer="above"))
-                figbump.update_layout(height=560, showlegend=(tt["Team Name"].nunique() <= 12))
+                # cresce com o nº de seleções p/ dar espaço a cada bandeira
+                alt = int(max(560, 34 * nteams))
+                figbump.update_layout(height=alt, showlegend=(nteams <= 12))
                 st.plotly_chart(figbump, use_container_width=True)
                 if tt["jogo"].max() == 1:
                     st.info("Com apenas 1 rodada o ranking é estático. Suba as próximas "
