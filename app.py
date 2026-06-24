@@ -121,6 +121,17 @@ MATCHES = [
        scorers="Manzambi x2, Vargas, Xhaka (pên.) · Mahmić (BIH)"),
     _M("SCOTLAND", 0, "MOROCCO", 1, "19/06/2026", round="Fase de Grupos",
        scorers="Saibari 2' (MAR)"),
+    _M("TÜRKIYE", 0, "PARAGUAY", 1, "19/06/2026", round="Fase de Grupos",
+       scorers="Galarza 2' (PAR) · Almirón expulso (45+3)"),
+    _M("USA", 2, "AUSTRALIA", 0, "19/06/2026", round="Fase de Grupos",
+       scorers="Burgess (gc) 11', Freeman 45' (USA)"),
+    _M("GERMANY", 2, "CÔTE D'IVOIRE", 1, "20/06/2026", round="Fase de Grupos",
+       scorers="Kessié 30' (CIV) · Undav x2 (68', 90+4', GER)"),
+    _M("ECUADOR", 0, "CURAÇAO", 0, "20/06/2026", round="Fase de Grupos",
+       scorers="Eloy Room: 15 defesas (recorde do torneio)"),
+    _M("NETHERLANDS", 5, "SWEDEN", 1, "20/06/2026", round="Fase de Grupos",
+       scorers="Brobbey x2, Gakpo x2, Summerville · Elanga (SWE)"),
+    _M("TUNISIA", 0, "JAPAN", 4, "20/06/2026", round="Fase de Grupos"),
 ]
 
 # índice por par de seleções (canônico)
