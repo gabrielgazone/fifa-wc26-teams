@@ -112,6 +112,15 @@ MATCHES = [
        stadium="Mercedes-Benz Stadium (Atlanta Stadium)", city="Atlanta",
        country="EUA",
        scorers="Sadílek 6' (CZE) · Mokoena 83' (pênalti, RSA)"),
+    _M("MEXICO", 1, "KOREA REPUBLIC", 0, "18/06/2026", round="Fase de Grupos",
+       scorers="Luis Romo 50' (MEX)"),
+    _M("CANADA", 6, "QATAR", 0, "18/06/2026", round="Fase de Grupos",
+       scorers="J. David x3, Larin, Saliba, Manai (gc) · 2 expulsões do Catar"),
+    _M("SWITZERLAND", 4, "BOSNIA AND HERZEGOVINA", 1, "18/06/2026",
+       round="Fase de Grupos",
+       scorers="Manzambi x2, Vargas, Xhaka (pên.) · Mahmić (BIH)"),
+    _M("SCOTLAND", 0, "MOROCCO", 1, "19/06/2026", round="Fase de Grupos",
+       scorers="Saibari 2' (MAR)"),
 ]
 
 # índice por par de seleções (canônico)
