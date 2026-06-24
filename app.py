@@ -104,6 +104,10 @@ MATCHES = [
     _M("COLOMBIA", 3, "UZBEKISTAN", 1, "17/06/2026"),
     _M("ENGLAND", 4, "CROATIA", 2, "17/06/2026"),
     _M("GHANA", 1, "PANAMA", 0, "18/06/2026"),
+    # rodada 2 (vão sendo adicionados conforme a Copa avança)
+    _M("BRAZIL", 3, "HAITI", 0, "19/06/2026", round="Fase de Grupos",
+       stadium="Lincoln Financial Field (Philadelphia Stadium)", city="Filadélfia",
+       country="EUA"),
 ]
 
 # índice por par de seleções (canônico)
