@@ -108,6 +108,10 @@ MATCHES = [
     _M("BRAZIL", 3, "HAITI", 0, "19/06/2026", round="Fase de Grupos",
        stadium="Lincoln Financial Field (Philadelphia Stadium)", city="Filadélfia",
        country="EUA"),
+    _M("CZECHIA", 1, "SOUTH AFRICA", 1, "18/06/2026", round="Fase de Grupos",
+       stadium="Mercedes-Benz Stadium (Atlanta Stadium)", city="Atlanta",
+       country="EUA",
+       scorers="Sadílek 6' (CZE) · Mokoena 83' (pênalti, RSA)"),
 ]
 
 # índice por par de seleções (canônico)
