@@ -152,6 +152,10 @@ MATCHES = [
        scorers="Cristiano Ronaldo x2 (1º a marcar em 6 Copas)"),
     _M("COLOMBIA", 1, "CONGO DR", 0, "23/06/2026", round="Fase de Grupos",
        scorers="Colômbia classificada às oitavas"),
+    _M("ENGLAND", 0, "GHANA", 0, "23/06/2026", round="Fase de Grupos",
+       scorers="Jogo truncado, sem gols"),
+    _M("PANAMA", 0, "CROATIA", 1, "23/06/2026", round="Fase de Grupos",
+       scorers="Budimir (CRO)"),
 ]
 
 # índice por par de seleções (canônico)
