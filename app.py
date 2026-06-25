@@ -132,6 +132,14 @@ MATCHES = [
     _M("NETHERLANDS", 5, "SWEDEN", 1, "20/06/2026", round="Fase de Grupos",
        scorers="Brobbey x2, Gakpo x2, Summerville · Elanga (SWE)"),
     _M("TUNISIA", 0, "JAPAN", 4, "20/06/2026", round="Fase de Grupos"),
+    _M("SPAIN", 4, "SAUDI ARABIA", 0, "21/06/2026", round="Fase de Grupos",
+       scorers="Yamal 10', Oyarzabal x2 (21', 24'), Altambakti (gc) 49'"),
+    _M("URUGUAY", 2, "CABO VERDE", 2, "21/06/2026", round="Fase de Grupos",
+       scorers="Maxi Araújo, Canobbio (URU) · Kevin Pina, Hélio Varela (CPV)"),
+    _M("NEW ZEALAND", 1, "EGYPT", 3, "21/06/2026", round="Fase de Grupos",
+       scorers="Zico, Salah, Trezeguet (EGY) · primeira vitória do Egito em Copas"),
+    _M("BELGIUM", 0, "IR IRAN", 0, "21/06/2026", round="Fase de Grupos",
+       scorers="Beiranvand: 7 defesas · Ngoy (BEL) expulso aos 66'"),
 ]
 
 # índice por par de seleções (canônico)
