@@ -140,6 +140,18 @@ MATCHES = [
        scorers="Zico, Salah, Trezeguet (EGY) · primeira vitória do Egito em Copas"),
     _M("BELGIUM", 0, "IR IRAN", 0, "21/06/2026", round="Fase de Grupos",
        scorers="Beiranvand: 7 defesas · Ngoy (BEL) expulso aos 66'"),
+    _M("NORWAY", 3, "SENEGAL", 2, "22/06/2026", round="Fase de Grupos",
+       scorers="Haaland x2 (NOR) · Mané, Jackson (SEN)"),
+    _M("FRANCE", 3, "IRAQ", 0, "22/06/2026", round="Fase de Grupos",
+       scorers="Mbappé x2 (FRA)"),
+    _M("ARGENTINA", 2, "AUSTRIA", 0, "22/06/2026", round="Fase de Grupos",
+       scorers="Messi (recorde de presenças em Copas) · L. Martínez"),
+    _M("JORDAN", 1, "ALGERIA", 2, "22/06/2026", round="Fase de Grupos",
+       scorers="Gouiri, Mahrez (ALG) · Al-Taamari (JOR)"),
+    _M("PORTUGAL", 5, "UZBEKISTAN", 0, "23/06/2026", round="Fase de Grupos",
+       scorers="Cristiano Ronaldo x2 (1º a marcar em 6 Copas)"),
+    _M("COLOMBIA", 1, "CONGO DR", 0, "23/06/2026", round="Fase de Grupos",
+       scorers="Colômbia classificada às oitavas"),
 ]
 
 # índice por par de seleções (canônico)
