@@ -2033,7 +2033,7 @@ with tab_ctx:
                        "passes, line breaks, pressão, turnovers) cruzados com o físico de "
                        "equipe. Fonte técnica: relatório oficial PMSR da FIFA.")
             csub = st.tabs(["📊 Perfil por quadrante", "🔵 Dispersão + correlação",
-                            "🌡️ Matriz de correlação"])
+                            "🌡️ Matriz de correlação", "🎯 Fases de jogo"])
 
             # 1) PERFIL POR QUADRANTE (como o exemplo enviado)
             with csub[0]:
@@ -2113,6 +2113,43 @@ with tab_ctx:
                                "Ex.: ver se mais alta intensidade anda junto com mais xG/pressão.")
                 else:
                     st.info("Selecione ao menos 2 variáveis.")
+
+            # 4) FASES DE JOGO POR RESULTADO
+            with csub[3]:
+                st.subheader("Distribuição de fases de jogo por resultado")
+                IN_PH = ["Construção livre (%)", "Construção pressionada (%)",
+                         "Progressão fase (%)", "Ataque terço final (%)", "Bola longa (%)",
+                         "Transição ofensiva (%)", "Contra-ataque (%)", "Bola parada (%)"]
+                OUT_PH = ["Pressão alta (%)", "Pressão média (%)", "Pressão baixa (%)",
+                          "Bloco alto (%)", "Bloco médio (%)", "Bloco baixo (%)",
+                          "Recuperação (%)", "Transição defensiva (%)", "Counter-press (%)"]
+                in_ph = [c for c in IN_PH if c in cdf.columns and cdf[c].notna().any()]
+                out_ph = [c for c in OUT_PH if c in cdf.columns and cdf[c].notna().any()]
+                has_res = "Resultado" in cdf.columns and cdf["Resultado"].notna().any()
+                if not in_ph and not out_ph:
+                    st.info("Sem dados de fases de jogo nestes jogos.")
+                elif not has_res:
+                    st.info("Defina os placares (aba Upload) para comparar fases por resultado.")
+                else:
+                    st.caption("Média do % de tempo em cada fase, por resultado. "
+                               "Lê o estilo: quem vence pressiona mais alto? constrói mais livre? "
+                               "Fonte: 'Phases of Play' do PMSR da FIFA.")
+                    for title, phs in [("⚔️ Com a bola (in-possession)", in_ph),
+                                       ("🛡️ Sem a bola (out-of-possession)", out_ph)]:
+                        if not phs:
+                            continue
+                        lng = cdf.dropna(subset=["Resultado"]).melt(
+                            id_vars=["Resultado"], value_vars=phs,
+                            var_name="Fase", value_name="pct")
+                        lng["pct"] = pd.to_numeric(lng["pct"], errors="coerce")
+                        agg = lng.groupby(["Fase", "Resultado"])["pct"].mean().reset_index()
+                        fig = px.bar(agg, x="Fase", y="pct", color="Resultado", barmode="group",
+                                     color_discrete_map=RESULT_COLORS, title=title,
+                                     labels={"pct": "% médio do tempo"},
+                                     category_orders={"Fase": phs,
+                                                      "Resultado": ["Vitória", "Empate", "Derrota"]})
+                        fig.update_layout(height=430, xaxis_tickangle=-30, xaxis_title="")
+                        st.plotly_chart(fig, use_container_width=True)
 
 
 # ════════════════════════════════════════════════════════════════════════════

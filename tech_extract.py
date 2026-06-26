@@ -26,6 +26,39 @@ LABELS = [
     ("Second Balls", "Segundas bolas", False),
 ]
 
+# fases de jogo (página "Phases of Play"): rótulo completo -> coluna (% do tempo)
+PHASES = [
+    ("Build Up Unopposed", "Construção livre (%)"),
+    ("Build Up Opposed", "Construção pressionada (%)"),
+    ("Progression", "Progressão fase (%)"),
+    ("Final Third", "Ataque terço final (%)"),
+    ("Long Ball", "Bola longa (%)"),
+    ("Attacking Transition", "Transição ofensiva (%)"),
+    ("Counter Attack", "Contra-ataque (%)"),
+    ("Set Piece", "Bola parada (%)"),
+    ("High Press", "Pressão alta (%)"),
+    ("Mid Press", "Pressão média (%)"),
+    ("Low Press", "Pressão baixa (%)"),
+    ("High Block", "Bloco alto (%)"),
+    ("Mid Block", "Bloco médio (%)"),
+    ("Low Block", "Bloco baixo (%)"),
+    ("Recovery", "Recuperação (%)"),
+    ("Defensive Transition", "Transição defensiva (%)"),
+    ("Counter-press", "Counter-press (%)"),
+]
+
+
+def all_columns():
+    """Ordem das colunas técnicas (Key Stats + Fases)."""
+    cols = []
+    for _, col, hasp in LABELS:
+        cols.append(col)
+        if hasp:
+            cols.append(f"{col} (no alvo)" if "Final" in col else f"{col} (completos)")
+    cols += [c for _, c in PHASES]
+    return cols
+
+
 _PAREN = re.compile(r"\(([\d.]+)\)")
 _NUM = re.compile(r"-?\d+(?:\.\d+)?")
 
@@ -95,6 +128,21 @@ def parse_pmsr_tech(pdf_path):
             sub = "no alvo" if "Final" in col else "completos"
             statsA[f"{col} ({sub})"] = pa
             statsB[f"{col} ({sub})"] = pb
+
+    # fases de jogo (página "Phases of Play"): rótulo e valores na MESMA linha
+    pi = next((i for i, pg in enumerate(doc) if "Phases of Play" in pg.get_text()), None)
+    if pi is not None:
+        for y, toks in _rows(doc[pi]).items():
+            left = _side(toks, 0, 420)
+            right = _side(toks, 560, 960)
+            center = _side(toks, 420, 560)
+            if "%" not in left or "%" not in right:
+                continue
+            for key, col in PHASES:
+                if key.lower() in center.lower():
+                    statsA[col] = _main(left)
+                    statsB[col] = _main(right)
+                    break
 
     return teams[0], teams[1], venue, {teams[0]: statsA, teams[1]: statsB}
 
