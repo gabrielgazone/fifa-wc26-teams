@@ -156,6 +156,15 @@ MATCHES = [
        scorers="Jogo truncado, sem gols"),
     _M("PANAMA", 0, "CROATIA", 1, "23/06/2026", round="Fase de Grupos",
        scorers="Budimir (CRO)"),
+    # rodada 3 (matchday 3)
+    _M("SCOTLAND", 0, "BRAZIL", 3, "24/06/2026", round="Fase de Grupos"),
+    _M("MOROCCO", 4, "HAITI", 2, "24/06/2026", round="Fase de Grupos"),
+    _M("SWITZERLAND", 2, "CANADA", 1, "24/06/2026", round="Fase de Grupos",
+       scorers="Suíça vence o Grupo B"),
+    _M("BOSNIA AND HERZEGOVINA", 3, "QATAR", 1, "24/06/2026", round="Fase de Grupos"),
+    _M("CZECHIA", 0, "MEXICO", 3, "24/06/2026", round="Fase de Grupos"),
+    _M("SOUTH AFRICA", 1, "KOREA REPUBLIC", 0, "24/06/2026", round="Fase de Grupos",
+       scorers="Maseko (RSA) · África do Sul avança"),
 ]
 
 # índice por par de seleções (canônico)
