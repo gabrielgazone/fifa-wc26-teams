@@ -755,6 +755,11 @@ def build_context_table(df):
         tab[tech_present] = tab.apply(fill_tech, axis=1)
     tab["Sigla"] = tab["Team Name"].map(team_code)
 
+    # força numérico (pd.NA + floats geram dtype object, que quebra mean/std)
+    for c in tech_present + ["Gols feitos", "Gols sofridos", "Pontos"]:
+        if c in tab.columns:
+            tab[c] = pd.to_numeric(tab[c], errors="coerce")
+
     phys_cols = [c for c in CTX_PHYS if c in tab.columns]
     res_cols = [c for c in ["Gols feitos", "Gols sofridos", "Pontos"] if c in tab.columns]
     tech_cols = [c for c in tech_present if c in tab.columns and tab[c].notna().any()]
