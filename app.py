@@ -165,6 +165,14 @@ MATCHES = [
     _M("CZECHIA", 0, "MEXICO", 3, "24/06/2026", round="Fase de Grupos"),
     _M("SOUTH AFRICA", 1, "KOREA REPUBLIC", 0, "24/06/2026", round="Fase de Grupos",
        scorers="Maseko (RSA) · África do Sul avança"),
+    _M("CURAÇAO", 0, "CÔTE D'IVOIRE", 2, "25/06/2026", round="Fase de Grupos"),
+    _M("ECUADOR", 2, "GERMANY", 1, "25/06/2026", round="Fase de Grupos",
+       scorers="Equador surpreende a Alemanha"),
+    _M("JAPAN", 1, "SWEDEN", 1, "25/06/2026", round="Fase de Grupos"),
+    _M("TUNISIA", 1, "NETHERLANDS", 3, "25/06/2026", round="Fase de Grupos"),
+    _M("TÜRKIYE", 3, "USA", 2, "25/06/2026", round="Fase de Grupos",
+       scorers="Türkiye vence nos acréscimos; EUA avançam mesmo assim"),
+    _M("PARAGUAY", 0, "AUSTRALIA", 0, "25/06/2026", round="Fase de Grupos"),
 ]
 
 # índice por par de seleções (canônico)
