@@ -766,6 +766,56 @@ def build_context_table(df):
     return tab, phys_cols + res_cols, tech_cols
 
 
+def context_diff(ctx, metric_cols):
+    """Diferencial intra-jogo (time − adversário do MESMO jogo) por equipe-jogo.
+    Devolve colunas 'Δ <métrica>' + 'ΔGols' (saldo) + Resultado. Controla o
+    contexto do jogo (árbitro, adversário, clima): sinal muito mais limpo."""
+    cols = [c for c in metric_cols if c in ctx.columns]
+    work = ctx.copy()
+    for c in cols:
+        work[c] = pd.to_numeric(work[c], errors="coerce")
+    if {"Gols feitos", "Gols sofridos"}.issubset(work.columns):
+        work["_saldo"] = (pd.to_numeric(work["Gols feitos"], errors="coerce")
+                          - pd.to_numeric(work["Gols sofridos"], errors="coerce"))
+    else:
+        work["_saldo"] = np.nan
+    rows = []
+    for mid, grp in work.groupby("Match ID"):
+        if len(grp) != 2:
+            continue
+        ra, rb = grp.iloc[0], grp.iloc[1]
+        for r, o in ((ra, rb), (rb, ra)):
+            rec = {"Match ID": mid, "Team Name": r["Team Name"], "Sigla": r.get("Sigla"),
+                   "Resultado": r.get("Resultado"), "ΔGols": r["_saldo"]}
+            for c in cols:
+                rec["Δ " + c] = r[c] - o[c]
+            rows.append(rec)
+    return pd.DataFrame(rows)
+
+
+def partial_spearman(x, y, z):
+    """Spearman parcial de x,y controlando z. Retorna (rho_parcial, p, n)."""
+    from scipy.stats import spearmanr, t as tdist
+    x, y, z = (np.asarray(v, float) for v in (x, y, z))
+    m = ~(np.isnan(x) | np.isnan(y) | np.isnan(z))
+    x, y, z = x[m], y[m], z[m]
+    n = len(x)
+    if n < 6:
+        return np.nan, np.nan, n
+    rxy = spearmanr(x, y).correlation
+    rxz = spearmanr(x, z).correlation
+    ryz = spearmanr(y, z).correlation
+    den = np.sqrt((1 - rxz ** 2) * (1 - ryz ** 2))
+    if not np.isfinite(den) or den == 0:
+        return np.nan, np.nan, n
+    rp = (rxy - rxz * ryz) / den
+    dfree = n - 3
+    if dfree <= 0 or abs(rp) >= 1:
+        return rp, np.nan, n
+    tval = rp * np.sqrt(dfree / (1 - rp ** 2))
+    return rp, float(2 * tdist.sf(abs(tval), dfree)), n
+
+
 # ── estado global ─────────────────────────────────────────────────────────────
 if "df" not in st.session_state:
     st.session_state.df = pd.DataFrame()
@@ -2037,14 +2087,157 @@ with tab_ctx:
             st.caption(f"{len(cdf)} equipes-jogo com dados técnicos (posse, xG, finalizações, "
                        "passes, line breaks, pressão, turnovers) cruzados com o físico de "
                        "equipe. Fonte técnica: relatório oficial PMSR da FIFA.")
-            csub = st.tabs(["📊 Perfil por quadrante", "🔵 Dispersão + correlação",
-                            "🌡️ Matriz de correlação", "🎯 Fases de jogo"])
+            csub = st.tabs(["🏆 O que vence", "⚡ Eficiência", "📊 Perfil por quadrante",
+                            "🔵 Dispersão + correlação", "🌡️ Matriz de correlação",
+                            "🎯 Fases de jogo"])
 
-            # 1) PERFIL POR QUADRANTE (como o exemplo enviado)
+            # variáveis testáveis (exclui as que DEFINEM o resultado)
+            metric_all = [c for c in ctx_xcols + ctx_ycols
+                          if c not in ("Gols feitos", "Gols sofridos", "Pontos")]
+            has_res = "Resultado" in cdf.columns and cdf["Resultado"].notna().any()
+
+            # 0) O QUE VENCE — effect sizes (Vit×Der) + diferencial vs adversário
             with csub[0]:
+                if not has_res:
+                    st.info("Defina os placares (aba Upload) para esta análise por resultado.")
+                else:
+                    st.subheader("🏅 O que separa quem vence de quem perde")
+                    win = cdf[cdf["Resultado"] == "Vitória"]
+                    los = cdf[cdf["Resultado"] == "Derrota"]
+                    rows = []
+                    for c in metric_all:
+                        a = pd.to_numeric(win[c], errors="coerce").dropna().values
+                        b = pd.to_numeric(los[c], errors="coerce").dropna().values
+                        if len(a) < 5 or len(b) < 5:
+                            continue
+                        p, d = mann_whitney(a, b)
+                        rows.append({"Variável": c, "delta": d, "p": p,
+                                     "sig": bool(pd.notna(p) and p < 0.05)})
+                    ef = (pd.DataFrame(rows, columns=["Variável", "delta", "p", "sig"])
+                          .dropna(subset=["delta"]).sort_values("delta"))
+                    if not ef.empty:
+                        ef["rótulo"] = np.where(ef["sig"], "★ " + ef["Variável"], ef["Variável"])
+                        ef["dir"] = np.where(ef["delta"] >= 0, "Mais em vitórias", "Mais em derrotas")
+                        fig = px.bar(ef, x="delta", y="rótulo", orientation="h", color="dir",
+                                     color_discrete_map={"Mais em vitórias": "#f0a500",
+                                                         "Mais em derrotas": "#7a1f3d"},
+                                     labels={"delta": "Cliff's δ (Vitória vs Derrota)", "rótulo": ""},
+                                     title="Tamanho de efeito por variável  (★ = p<0,05)")
+                        fig.update_layout(height=max(360, 22 * len(ef)), legend_title="")
+                        fig.add_vline(x=0, line_color="gray")
+                        st.plotly_chart(fig, use_container_width=True)
+                        sig = ef[ef["sig"]].copy()
+                        sig["abs"] = sig["delta"].abs()
+                        sig = sig.sort_values("abs", ascending=False)
+                        if len(sig):
+                            top = " · ".join(f"{r['Variável']} (δ={r['delta']:+.2f})"
+                                             for _, r in sig.head(6).iterrows())
+                            st.success(f"**Diferenciam com significância (p<0,05):** {top}")
+                        else:
+                            st.info("Nenhuma variável atinge p<0,05 — amostra pequena; "
+                                    "leia os δ como tendências, não como prova.")
+                        st.caption(f"δ>0 (dourado) = maior em vitórias. |δ|: 0,15 pequeno · 0,33 médio "
+                                   f"· 0,47 grande. n={len(win)} vitórias × {len(los)} derrotas.")
+
+                    st.markdown("---")
+                    st.subheader("⚖️ Diferencial vs adversário → saldo de gols")
+                    st.caption("Para cada jogo, a diferença contra o adversário daquele jogo "
+                               "(1 linha por partida). Como ambos dividem o mesmo contexto, o Δ é "
+                               "um sinal limpo do que realmente pesa no placar.")
+                    diff = context_diff(ctx, metric_all).drop_duplicates("Match ID")
+                    dcols = [c for c in diff.columns if c.startswith("Δ ")]
+                    if not diff.empty and diff["ΔGols"].notna().any():
+                        from scipy.stats import spearmanr
+                        rr = []
+                        for c in dcols:
+                            s = diff[[c, "ΔGols"]].dropna()
+                            if len(s) < 6:
+                                continue
+                            rho, pp = spearmanr(s[c], s["ΔGols"])
+                            rr.append({"Variável": c[2:], "rho": rho,
+                                       "sig": bool(pd.notna(pp) and pp < 0.05)})
+                        rk = (pd.DataFrame(rr, columns=["Variável", "rho", "sig"])
+                              .dropna(subset=["rho"]).sort_values("rho"))
+                        if not rk.empty:
+                            rk["rótulo"] = np.where(rk["sig"], "★ Δ" + rk["Variável"],
+                                                    "Δ" + rk["Variável"])
+                            fig = px.bar(rk, x="rho", y="rótulo", orientation="h", color="rho",
+                                         color_continuous_scale="RdBu", range_color=[-0.6, 0.6],
+                                         labels={"rho": "Spearman(Δvariável, Δgols)", "rótulo": ""},
+                                         title="O que — feito melhor que o rival — vira saldo (★ p<0,05)")
+                            fig.update_layout(height=max(360, 22 * len(rk)), coloraxis_showscale=False)
+                            fig.add_vline(x=0, line_color="gray")
+                            st.plotly_chart(fig, use_container_width=True)
+                        pickd = st.selectbox("Ver dispersão de um diferencial",
+                                             [c[2:] for c in dcols], key="ctx_diff_pick")
+                        col = "Δ " + pickd
+                        s = diff[[col, "ΔGols", "Resultado", "Sigla"]].dropna(subset=[col, "ΔGols"])
+                        if len(s) >= 4:
+                            rho, pp = spearmanr(s[col], s["ΔGols"])
+                            fig = px.scatter(s, x=col, y="ΔGols", color="Resultado",
+                                             color_discrete_map=RESULT_COLORS, hover_name="Sigla",
+                                             title=f"Δ{pickd} × saldo de gols  (ρ={rho:.2f}, p={pp:.3f}, n={len(s)})")
+                            fig.add_vline(x=0, line_color="gray")
+                            fig.add_hline(y=0, line_color="gray")
+                            fig.update_layout(height=460)
+                            st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("Sem saldo de gols disponível para o diferencial.")
+
+            # 1) EFICIÊNCIA — custo físico do produto tático
+            with csub[1]:
+                st.subheader("⚡ Eficiência: custo físico do produto tático")
+                st.caption("Quanto de esforço físico cada produto técnico custou — separa quem é "
+                           "eficiente de quem 'corre muito para pouco'.")
+                e = cdf.copy()
+                specs = [
+                    ("m alta intensidade / progressão", "Z4+Z5 (km)", "Progressões", 1000, "menor = melhor"),
+                    ("m alta intensidade / line break", "Z4+Z5 (km)", "Line breaks", 1000, "menor = melhor"),
+                    ("m alta intensidade / finalização", "Z4+Z5 (km)", "Finalizações", 1000, "menor = melhor"),
+                    ("xG por km de Z4+Z5", "xG", "Z4+Z5 (km)", 1, "maior = melhor"),
+                    ("Pressões por km", "Pressões def.", "Dist. total (km)", 1, "densidade de pressão"),
+                    ("Finalizações por 100 passes", "Finalizações", "Passes", 100, "maior = mais direto"),
+                ]
+                effcols = []
+                for name, a, b, k, _ in specs:
+                    if a in e.columns and b in e.columns:
+                        num = pd.to_numeric(e[a], errors="coerce")
+                        den = pd.to_numeric(e[b], errors="coerce").replace(0, np.nan)
+                        e[name] = num / den * k
+                        effcols.append(name)
+                if not effcols:
+                    st.info("Faltam variáveis para calcular eficiência.")
+                else:
+                    pick = st.selectbox("Métrica de eficiência", effcols, key="ctx_eff")
+                    note = next(s[4] for s in specs if s[0] == pick)
+                    st.caption(f"**{pick}** — interpretação: _{note}_.")
+                    asc = "menor" in note
+                    cc1, cc2 = st.columns(2)
+                    if has_res:
+                        agg = (e.dropna(subset=[pick]).groupby("Resultado")[pick].mean()
+                               .reindex(["Vitória", "Empate", "Derrota"]).dropna().reset_index())
+                        fig = px.bar(agg, x="Resultado", y=pick, color="Resultado",
+                                     color_discrete_map=RESULT_COLORS,
+                                     title="Média por resultado")
+                        fig.update_layout(showlegend=False, height=380)
+                        cc1.plotly_chart(fig, use_container_width=True)
+                    rank = (e.dropna(subset=[pick])[["Sigla", pick]]
+                            .sort_values(pick, ascending=asc).head(12))
+                    figr = px.bar(rank, x=pick, y="Sigla", orientation="h",
+                                  color_discrete_sequence=["#f0a500"],
+                                  title=("Mais eficientes" if asc else "Mais produtivos") + " (top 12)")
+                    figr.update_layout(height=380, yaxis=dict(autorange="reversed"))
+                    cc2.plotly_chart(figr, use_container_width=True)
+                    st.caption("Equipe-jogo individuais; um mesmo país aparece mais de uma vez "
+                               "(uma por partida).")
+
+            # 2) PERFIL POR QUADRANTE (com Kruskal-Wallis e IC 95%)
+            with csub[2]:
                 st.subheader("Indicadores técnicos por perfil físico (TD × Z4+Z5)")
                 st.caption("Cada equipe-jogo é classificada por distância total (TD) e por "
                            "distância em alta intensidade (Z4+Z5), abaixo/acima da mediana.")
+                use_ci = st.checkbox("Barras de erro = IC 95% (em vez de desvio-padrão)",
+                                     value=True, key="ctx_ci")
                 base = cdf.dropna(subset=["Dist. total (km)", "Z4+Z5 (km)"]).copy()
                 td_med, z_med = base["Dist. total (km)"].median(), base["Z4+Z5 (km)"].median()
                 base["Perfil"] = (np.where(base["Dist. total (km)"] >= td_med, "TD alto", "TD baixo")
@@ -2055,52 +2248,73 @@ with tab_ctx:
                          if o in base["Perfil"].unique()]
                 metrics4 = [m for m in ["xG", "Gols feitos", "Gols sofridos", "Posse (%)"]
                             if m in base.columns]
+                from scipy.stats import kruskal
                 cols = st.columns(len(metrics4))
                 for box, m in zip(cols, metrics4):
-                    agg = base.groupby("Perfil")[m].agg(["mean", "std"]).reindex(order)
-                    fig = go.Figure(go.Bar(
-                        x=order, y=agg["mean"],
-                        error_y=dict(type="data", array=agg["std"].fillna(0)),
-                        marker_color="#7a1f3d"))
-                    fig.update_layout(title=m, height=360, xaxis_tickangle=-30,
-                                      margin=dict(t=40, b=90), showlegend=False)
+                    agg = base.dropna(subset=[m]).groupby("Perfil")[m].agg(
+                        ["mean", "std", "count"]).reindex(order)
+                    err = (1.96 * agg["std"] / np.sqrt(agg["count"])) if use_ci else agg["std"]
+                    grps = [base[base["Perfil"] == o][m].dropna().values for o in order]
+                    grps = [g for g in grps if len(g) >= 2]
+                    try:
+                        kwp = kruskal(*grps).pvalue if len(grps) >= 2 else np.nan
+                    except Exception:
+                        kwp = np.nan
+                    ttl = m + (f"  (KW p={kwp:.3f})" if pd.notna(kwp) else "")
+                    fig = go.Figure(go.Bar(x=order, y=agg["mean"],
+                                           error_y=dict(type="data", array=err.fillna(0)),
+                                           marker_color="#7a1f3d"))
+                    fig.update_layout(title=ttl, height=380, xaxis_tickangle=-30,
+                                      margin=dict(t=46, b=90), showlegend=False)
                     box.plotly_chart(fig, use_container_width=True)
-                st.caption(f"Medianas: TD {td_med:.1f} km · Z4+Z5 {z_med:.2f} km · "
-                           "barras de erro = desvio-padrão. "
-                           "Lê-se: equipes mais intensas (Z4+Z5 alto) produzem mais xG?")
+                st.caption(f"Medianas: TD {td_med:.1f} km · Z4+Z5 {z_med:.2f} km. "
+                           "KW = Kruskal-Wallis (p<0,05 ⇒ algum quadrante difere de verdade). "
+                           "Barras = " + ("IC 95%." if use_ci else "desvio-padrão."))
 
-            # 2) DISPERSÃO + CORRELAÇÃO
-            with csub[1]:
+            # 3) DISPERSÃO + CORRELAÇÃO (com correlação parcial)
+            with csub[3]:
                 st.subheader("Dispersão físico × técnico")
-                c1, c2 = st.columns(2)
+                c1, c2, c3 = st.columns(3)
                 xv = c1.selectbox("Eixo X (físico / resultado)", ctx_xcols,
                                   index=min(1, len(ctx_xcols) - 1), key="ctx_x")
                 yv = c2.selectbox("Eixo Y (técnico-tático)", ctx_ycols, key="ctx_y")
-                sc = cdf.dropna(subset=[xv, yv]).copy()
+                ctrl_opts = ["(nenhum)"] + [c for c in ["Posse (%)", "Passes", "Dist. total (km)"]
+                                            if c in cdf.columns and c not in (xv, yv)]
+                ctrl = c3.selectbox("Controlar por (corr. parcial)", ctrl_opts, key="ctx_ctrl")
+                sc = cdf.copy()
                 sc[xv] = pd.to_numeric(sc[xv], errors="coerce")
                 sc[yv] = pd.to_numeric(sc[yv], errors="coerce")
                 sc = sc.dropna(subset=[xv, yv])
                 if len(sc) >= 4:
                     from scipy.stats import spearmanr
                     rho, p = spearmanr(sc[xv], sc[yv])
-                    color = "Resultado" if "Resultado" in sc.columns else None
-                    fig = px.scatter(sc, x=xv, y=yv, color=color,
+                    ttl = f"{yv} × {xv}  (ρ={rho:.2f}, p={p:.3f}, n={len(sc)})"
+                    if ctrl != "(nenhum)":
+                        rp, pp, _ = partial_spearman(
+                            sc[xv].values, sc[yv].values,
+                            pd.to_numeric(sc[ctrl], errors="coerce").values)
+                        ttl += f"  |  parcial (controle: {ctrl}) ρ={rp:.2f}, p={pp:.3f}"
+                    fig = px.scatter(sc, x=xv, y=yv,
+                                     color="Resultado" if "Resultado" in sc.columns else None,
                                      color_discrete_map=RESULT_COLORS, hover_name="Team Name",
-                                     hover_data=["Sigla"],
-                                     title=f"{yv} × {xv}  (Spearman ρ={rho:.2f}, p={p:.3f}, n={len(sc)})")
-                    m, b = np.polyfit(sc[xv], sc[yv], 1)
+                                     hover_data=["Sigla"], title=ttl)
+                    mm, bb = np.polyfit(sc[xv], sc[yv], 1)
                     xs = np.array([sc[xv].min(), sc[xv].max()])
-                    fig.add_trace(go.Scatter(x=xs, y=m * xs + b, mode="lines",
+                    fig.add_trace(go.Scatter(x=xs, y=mm * xs + bb, mode="lines",
                                              line=dict(dash="dash", color="gray"),
                                              name="tendência", showlegend=False))
                     fig.update_layout(height=520)
                     st.plotly_chart(fig, use_container_width=True)
-                    st.caption("Cada ponto é uma equipe-jogo. Correlação não implica causalidade.")
+                    cap = "Cada ponto é uma equipe-jogo. Correlação não implica causalidade."
+                    if ctrl != "(nenhum)":
+                        cap += (f" A correlação parcial remove o efeito de {ctrl}: se ρ cai muito, "
+                                f"a associação era explicada por {ctrl} (ex.: ter mais a bola).")
+                    st.caption(cap)
                 else:
                     st.info("Poucos dados para o gráfico.")
 
-            # 3) MATRIZ DE CORRELAÇÃO
-            with csub[2]:
+            # 4) MATRIZ DE CORRELAÇÃO
+            with csub[4]:
                 st.subheader("Matriz de correlação (físico × técnico)")
                 allv = ctx_xcols + ctx_ycols
                 default = [v for v in ["Dist. total (km)", "Z4+Z5 (km)", "# Sprints", "Pontos",
@@ -2120,7 +2334,7 @@ with tab_ctx:
                     st.info("Selecione ao menos 2 variáveis.")
 
             # 4) FASES DE JOGO POR RESULTADO
-            with csub[3]:
+            with csub[5]:
                 st.subheader("Distribuição de fases de jogo por resultado")
                 IN_PH = ["Construção livre (%)", "Construção pressionada (%)",
                          "Progressão fase (%)", "Ataque terço final (%)", "Bola longa (%)",
