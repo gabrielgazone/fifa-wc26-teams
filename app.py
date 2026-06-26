@@ -11,6 +11,10 @@ from positions_data import (
     get_position, POSITION_LABELS, POSITION_ORDER,
     team_code, flag_url, team_latlon, canon,
 )
+try:
+    from technical_data import tech_for, TECH_COLS
+except Exception:        # módulo opcional (dados técnico-táticos do PMSR)
+    tech_for, TECH_COLS = (lambda *a: None), []
 
 # ── configuração da página ────────────────────────────────────────────────────
 st.set_page_config(
@@ -701,6 +705,62 @@ def build_team_infographic(df_all, team):
     return bytes(pdf.output())
 
 
+# ── tabela contextual: 1 linha por equipe-jogo (físico + resultado + técnico) ──
+CTX_PHYS = ["Dist. total (km)", "Z4+Z5 (km)", "Sprint Z5 (km)", "# Sprints", "# Speed Runs"]
+
+
+def build_context_table(df):
+    if "Team Name" not in df.columns or "Match ID" not in df.columns:
+        return pd.DataFrame(), [], []
+    d = add_derived(df)
+    full = all(c in d.columns for c in SPEED_ZONES.values())
+    if not full:
+        return pd.DataFrame(), [], []
+    # físico somado por equipe-jogo
+    g = d.groupby(["Team Name", "Match ID"])
+    tab = pd.DataFrame({
+        "Dist. total (km)": g["Total Distance (m)"].sum() / 1000,
+        "Z4+Z5 (km)": g["Z4+Z5 (m)"].sum() / 1000,
+        "Sprint Z5 (km)": g["25+ km/h (m)"].sum() / 1000,
+        "# Sprints": g["# Sprints"].sum(),
+        "# Speed Runs": g["# Speed Runs"].sum(),
+    }).reset_index()
+    # resultado (constante dentro da equipe-jogo)
+    for col, src in [("Gols feitos", "Gols Marcados"), ("Gols sofridos", "Gols Sofridos"),
+                     ("Pontos", "Pontos"), ("Resultado", "Resultado")]:
+        if src in d.columns:
+            tab[col] = tab.apply(
+                lambda r: d[(d["Team Name"] == r["Team Name"])
+                            & (d["Match ID"] == r["Match ID"])][src].iloc[0], axis=1)
+    # técnico (via par de seleções)
+    match_teams = {mid: teams_of_match(d, mid) for mid in d["Match ID"].dropna().unique()}
+    tech_present = TECH_COLS if TECH_COLS else []
+    for c in tech_present:
+        tab[c] = pd.NA
+
+    def fill_tech(row):
+        teams = match_teams.get(row["Match ID"], [])
+        opp = next((t for t in teams if canon(t) != canon(row["Team Name"])), None)
+        if not opp:
+            return pd.Series([pd.NA] * len(tech_present), index=tech_present)
+        entry = tech_for(row["Team Name"], opp)
+        if not entry:
+            return pd.Series([pd.NA] * len(tech_present), index=tech_present)
+        st_team = entry.get(canon(row["Team Name"]))
+        if not st_team:
+            return pd.Series([pd.NA] * len(tech_present), index=tech_present)
+        return pd.Series([st_team.get(c, pd.NA) for c in tech_present], index=tech_present)
+
+    if tech_present:
+        tab[tech_present] = tab.apply(fill_tech, axis=1)
+    tab["Sigla"] = tab["Team Name"].map(team_code)
+
+    phys_cols = [c for c in CTX_PHYS if c in tab.columns]
+    res_cols = [c for c in ["Gols feitos", "Gols sofridos", "Pontos"] if c in tab.columns]
+    tech_cols = [c for c in tech_present if c in tab.columns and tab[c].notna().any()]
+    return tab, phys_cols + res_cols, tech_cols
+
+
 # ── estado global ─────────────────────────────────────────────────────────────
 if "df" not in st.session_state:
     st.session_state.df = pd.DataFrame()
@@ -754,11 +814,12 @@ st.markdown(
 )
 
 # ── abas ──────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab_dest, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab_dest, tab_ctx, tab4, tab5 = st.tabs([
     "📂 Upload",
     "📋 Tabela & Filtros",
     "📊 Análise Física",
     "✨ Destaques",
+    "🧩 Contextual",
     "⚙️ Transformar",
     "📄 Relatório PDF",
 ])
@@ -1950,6 +2011,108 @@ with tab_dest:
                             st.info(f"🏆 Vencedor da partida: **{venc[0]}**")
                 else:
                     st.info("Esta tela precisa de uma métrica indisponível nos dados.")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# ABA 🧩 — Análise Contextual (físico × técnico-tático)
+# ════════════════════════════════════════════════════════════════════════════
+with tab_ctx:
+    df0 = st.session_state.df
+    if df0.empty:
+        st.info("Carregue arquivos na aba **Upload** primeiro.")
+    else:
+        ctx, ctx_xcols, ctx_ycols = build_context_table(df0)
+        if ctx.empty or not ctx_ycols:
+            st.info("Sem dados técnico-táticos para cruzar nestes jogos. O técnico vem dos "
+                    "relatórios PMSR da FIFA (posse, xG, finalizações…) — disponível para a "
+                    "maioria dos jogos da fase de grupos.")
+        else:
+            cdf = ctx[ctx[ctx_ycols].notna().any(axis=1)].copy()
+            st.header("🧩 Análise Contextual — físico × técnico-tático")
+            st.caption(f"{len(cdf)} equipes-jogo com dados técnicos (posse, xG, finalizações, "
+                       "passes, line breaks, pressão, turnovers) cruzados com o físico de "
+                       "equipe. Fonte técnica: relatório oficial PMSR da FIFA.")
+            csub = st.tabs(["📊 Perfil por quadrante", "🔵 Dispersão + correlação",
+                            "🌡️ Matriz de correlação"])
+
+            # 1) PERFIL POR QUADRANTE (como o exemplo enviado)
+            with csub[0]:
+                st.subheader("Indicadores técnicos por perfil físico (TD × Z4+Z5)")
+                st.caption("Cada equipe-jogo é classificada por distância total (TD) e por "
+                           "distância em alta intensidade (Z4+Z5), abaixo/acima da mediana.")
+                base = cdf.dropna(subset=["Dist. total (km)", "Z4+Z5 (km)"]).copy()
+                td_med, z_med = base["Dist. total (km)"].median(), base["Z4+Z5 (km)"].median()
+                base["Perfil"] = (np.where(base["Dist. total (km)"] >= td_med, "TD alto", "TD baixo")
+                                  + " / " + np.where(base["Z4+Z5 (km)"] >= z_med,
+                                                     "Z4+Z5 alto", "Z4+Z5 baixo"))
+                order = [o for o in ["TD baixo / Z4+Z5 baixo", "TD alto / Z4+Z5 baixo",
+                                     "TD baixo / Z4+Z5 alto", "TD alto / Z4+Z5 alto"]
+                         if o in base["Perfil"].unique()]
+                metrics4 = [m for m in ["xG", "Gols feitos", "Gols sofridos", "Posse (%)"]
+                            if m in base.columns]
+                cols = st.columns(len(metrics4))
+                for box, m in zip(cols, metrics4):
+                    agg = base.groupby("Perfil")[m].agg(["mean", "std"]).reindex(order)
+                    fig = go.Figure(go.Bar(
+                        x=order, y=agg["mean"],
+                        error_y=dict(type="data", array=agg["std"].fillna(0)),
+                        marker_color="#7a1f3d"))
+                    fig.update_layout(title=m, height=360, xaxis_tickangle=-30,
+                                      margin=dict(t=40, b=90), showlegend=False)
+                    box.plotly_chart(fig, use_container_width=True)
+                st.caption(f"Medianas: TD {td_med:.1f} km · Z4+Z5 {z_med:.2f} km · "
+                           "barras de erro = desvio-padrão. "
+                           "Lê-se: equipes mais intensas (Z4+Z5 alto) produzem mais xG?")
+
+            # 2) DISPERSÃO + CORRELAÇÃO
+            with csub[1]:
+                st.subheader("Dispersão físico × técnico")
+                c1, c2 = st.columns(2)
+                xv = c1.selectbox("Eixo X (físico / resultado)", ctx_xcols,
+                                  index=min(1, len(ctx_xcols) - 1), key="ctx_x")
+                yv = c2.selectbox("Eixo Y (técnico-tático)", ctx_ycols, key="ctx_y")
+                sc = cdf.dropna(subset=[xv, yv]).copy()
+                sc[xv] = pd.to_numeric(sc[xv], errors="coerce")
+                sc[yv] = pd.to_numeric(sc[yv], errors="coerce")
+                sc = sc.dropna(subset=[xv, yv])
+                if len(sc) >= 4:
+                    from scipy.stats import spearmanr
+                    rho, p = spearmanr(sc[xv], sc[yv])
+                    color = "Resultado" if "Resultado" in sc.columns else None
+                    fig = px.scatter(sc, x=xv, y=yv, color=color,
+                                     color_discrete_map=RESULT_COLORS, hover_name="Team Name",
+                                     hover_data=["Sigla"],
+                                     title=f"{yv} × {xv}  (Spearman ρ={rho:.2f}, p={p:.3f}, n={len(sc)})")
+                    m, b = np.polyfit(sc[xv], sc[yv], 1)
+                    xs = np.array([sc[xv].min(), sc[xv].max()])
+                    fig.add_trace(go.Scatter(x=xs, y=m * xs + b, mode="lines",
+                                             line=dict(dash="dash", color="gray"),
+                                             name="tendência", showlegend=False))
+                    fig.update_layout(height=520)
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.caption("Cada ponto é uma equipe-jogo. Correlação não implica causalidade.")
+                else:
+                    st.info("Poucos dados para o gráfico.")
+
+            # 3) MATRIZ DE CORRELAÇÃO
+            with csub[2]:
+                st.subheader("Matriz de correlação (físico × técnico)")
+                allv = ctx_xcols + ctx_ycols
+                default = [v for v in ["Dist. total (km)", "Z4+Z5 (km)", "# Sprints", "Pontos",
+                                       "xG", "Posse (%)", "Finalizações", "Passes", "Pressões def."]
+                           if v in allv]
+                pick = st.multiselect("Variáveis", allv, default=default, key="ctx_corr")
+                if len(pick) >= 2:
+                    cm = cdf[pick].apply(pd.to_numeric, errors="coerce").corr(method="spearman")
+                    fig = px.imshow(cm, text_auto=".2f", aspect="auto",
+                                    color_continuous_scale="RdBu", zmin=-1, zmax=1,
+                                    title="Correlação de Spearman (físico × técnico)")
+                    fig.update_layout(height=600)
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.caption("Azul = relação positiva; vermelho = negativa. "
+                               "Ex.: ver se mais alta intensidade anda junto com mais xG/pressão.")
+                else:
+                    st.info("Selecione ao menos 2 variáveis.")
 
 
 # ════════════════════════════════════════════════════════════════════════════
