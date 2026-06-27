@@ -22,6 +22,14 @@ ADDED_TIME = {
     _key("Norway", "France"): (5, 5),
     # SEN 5–0 IRQ · rodada 3 · 1ºT +9 (relógio 0:30 +9) · 2ºT +6 (2:11 +6) → 105 min
     _key("Senegal", "Iraq"): (9, 6),
+    # URU 0–1 ESP · rodada 3 · 1ºT +8 (2:19 +8) · 2ºT +5 (3:17 +5) → 103 min
+    _key("Uruguay", "Spain"): (8, 5),
+    # NZL 1–4 BEL · rodada 3 · 1ºT +6 (3:55 +6) · 2ºT +4 (0:40 +4) → 100 min
+    _key("New Zealand", "Belgium"): (6, 4),
+    # EGY 1–1 IRN · rodada 3 · 1ºT +5 (0:22 +5) · 2ºT +6 (1:22 +6) → 101 min
+    _key("Egypt", "IR Iran"): (5, 6),
+    # CPV 0–0 KSA · rodada 3 · 1ºT +6 (0:48 +6) · 2ºT +5 (1:52 +5) → 101 min
+    _key("Cabo Verde", "Saudi Arabia"): (6, 5),
 }
 
 

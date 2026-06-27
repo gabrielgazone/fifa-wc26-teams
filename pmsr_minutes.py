@@ -67,14 +67,14 @@ def _players(R, side, y0, y1):
             if side == "A":
                 if x < 60 and t.isdigit():
                     jersey = t
-                if 150 <= x < 285 and MIN.match(t):
-                    mins.append(_reg(t))
+                if 108 <= x < 300 and MIN.match(t):   # janela larga: nomes curtos
+                    mins.append(_reg(t))               # empurram o minuto p/ esquerda
             else:
                 if m and m.group(2):                 # pos+nº colado (ex.: FW10)
                     jersey = m.group(2)
                 if 895 <= x <= 912 and t.isdigit():
                     jersey = t
-                if 640 <= x < 805 and MIN.match(t):
+                if 640 <= x < 832 and MIN.match(t):   # nomes longos jogam p/ direita
                     mins.append(_reg(t))
         if any(POSRE.match(t) for _, t in toks) and jersey:
             res.append((jersey, sorted(set(mins))))
