@@ -1,0 +1,178 @@
+# -*- coding: utf-8 -*-
+"""Calcula os MINUTOS jogados por atleta a partir de fontes OFICIAIS, sem inferir:
+
+  • substituições  -> página 2 do PMSR ("Match Summary - Teams"): cada reserva
+    que entrou traz o minuto de entrada; cada titular substituído traz o minuto
+    de saída. Minutos de gol/cartão aparecem junto — são descartados pelo
+    PAREAMENTO (a saída de um titular casa com a entrada de um reserva).
+  • acréscimos por tempo -> added_time.py (relógio do 4º árbitro).
+
+Trava de segurança: só preenche o CSV se AMBOS os times passarem na validação
+estrutural (11 titulares, nº de entradas = nº de saídas, todas pareadas, e o
+total de minutos = 11 × duração da partida). Caso contrário, NÃO grava — o
+usuário não aceita minutos inferidos/aproximados.
+
+Uso:
+    python pmsr_minutes.py PARTIDA.pdf                 # só mostra (dry-run)
+    python pmsr_minutes.py PARTIDA.pdf "ARQUIVO.csv"   # valida e preenche
+"""
+import re
+import sys
+import fitz
+
+from added_time import added_time_for
+from positions_data import canon
+
+MIN = re.compile(r"^(?:90\+\d+|45\+\d+|\d{1,2})'$")
+POSRE = re.compile(r"^(GK|DF|MF|FW)(\d*)$")
+
+
+def _reg(mtok):
+    """'83'' -> 83 ; '90+4'' -> 90 ; '45+2'' -> 45 (minuto de regulamento)."""
+    s = mtok.rstrip("'")
+    return int(s.split("+")[0]) if "+" in s else int(s)
+
+
+def _rows(pg):
+    d = {}
+    for w in pg.get_text("words"):
+        y = round(w[1] / 2) * 2
+        d.setdefault(y, []).append((round(w[0]), w[4]))
+    return {y: sorted(v) for y, v in d.items()}
+
+
+def _headers(R):
+    h = {"A_start": None, "A_sub": None, "B_start": None, "B_sub": None}
+    for y, toks in R.items():
+        for x, t in toks:
+            if t == "STARTING":
+                k = "A_start" if x < 400 else "B_start"
+                h[k] = y if h[k] is None else min(h[k], y)
+            elif t == "SUBSTITUTES":
+                k = "A_sub" if x < 400 else "B_sub"
+                h[k] = y if h[k] is None else min(h[k], y)
+    return h
+
+
+def _players(R, side, y0, y1):
+    """[(jersey, [min_reg...])] para o lado ('A' esq. / 'B' dir.) na faixa."""
+    res = []
+    for y in sorted(R):
+        if not (y0 < y < y1):
+            continue
+        toks = R[y]
+        jersey, mins = None, []
+        for x, t in toks:
+            m = POSRE.match(t)
+            if side == "A":
+                if x < 60 and t.isdigit():
+                    jersey = t
+                if 150 <= x < 285 and MIN.match(t):
+                    mins.append(_reg(t))
+            else:
+                if m and m.group(2):                 # pos+nº colado (ex.: FW10)
+                    jersey = m.group(2)
+                if 895 <= x <= 912 and t.isdigit():
+                    jersey = t
+                if 640 <= x < 805 and MIN.match(t):
+                    mins.append(_reg(t))
+        if any(POSRE.match(t) for _, t in toks) and jersey:
+            res.append((jersey, sorted(set(mins))))
+    return res
+
+
+def _team_minutes(starters, reserves, a1, a2):
+    """-> (dict jersey->minutos, info de validação)."""
+    T = 90 + a1 + a2
+
+    def off_played(m):                                # minutos de quem saiu em m
+        return m + (a1 if m >= 45 else 0)
+
+    on = [(j, min(ms)) for j, ms in reserves if ms]   # reserva entrou no MENOR minuto
+    pool = {j: list(ms) for j, ms in starters}
+    off, unmatched = {}, []
+    for _, m in sorted(on, key=lambda e: e[1]):
+        cand = [j for j, ms in pool.items() if m in ms and j not in off]
+        if cand:
+            off[cand[0]] = m
+            pool[cand[0]].remove(m)
+        else:
+            unmatched.append(m)
+    mins = {j: round(off_played(off[j]) if j in off else T, 1) for j, _ in starters}
+    for j, m in on:
+        mins[j] = round(T - off_played(m), 1)
+    total = round(sum(mins.values()), 1)
+    info = dict(on=on, off=off, unmatched=unmatched, nstart=len(starters),
+                total=total, expected=round(11 * T, 1))
+    info["ok"] = (info["nstart"] == 11 and not unmatched
+                  and len(on) == len(off) and total == info["expected"])
+    return mins, info
+
+
+def compute(pdf_path):
+    """-> ({canon(time): {jersey: minutos}}, {canon(time): info}) ou (None, None)."""
+    from pdf_to_csv import parse_pmsr
+    doc = fitz.open(pdf_path)
+    R = _rows(doc[1])
+    h = _headers(R)
+    tp, _ = parse_pmsr(pdf_path)
+    tA, tB = tp[0][0], tp[1][0]
+    at = added_time_for(tA, tB)
+    if not at:
+        return None, None
+    a1, a2 = at
+    out, status = {}, {}
+    for nm, side in [(tA, "A"), (tB, "B")]:
+        st = _players(R, side, h[side + "_start"], h[side + "_sub"])
+        rv = _players(R, side, h[side + "_sub"], 99999)
+        mins, info = _team_minutes(st, rv, a1, a2)
+        out[canon(nm)], status[canon(nm)] = mins, info
+    return out, status
+
+
+def fill_csv(pdf_path, csv_path):
+    """Valida e grava Total Duration no CSV. Levanta erro se não validar."""
+    mins, status = compute(pdf_path)
+    if not mins:
+        raise SystemExit("Sem acréscimo armazenado em added_time.py — abortado.")
+    for tm, info in status.items():
+        flag = "OK" if info["ok"] else "*** REVISAR ***"
+        print(f"  {tm}: total {info['total']}/{info['expected']} "
+              f"unmatched={info['unmatched']} [{flag}]")
+    if not all(i["ok"] for i in status.values()):
+        raise SystemExit("Validação falhou — minutos NÃO gravados.")
+
+    lines = open(csv_path, encoding="utf-8").read().splitlines()
+    H = lines[0].split(";")
+    ti, ji, di = H.index("Team Name"), H.index("Jersey #"), H.index("Total Duration (min)")
+    out, missing = [lines[0]], []
+    for ln in lines[1:]:
+        if not ln.strip():
+            continue
+        f = ln.split(";")
+        val = mins.get(canon(f[ti]), {}).get(f[ji].strip())
+        if val is None:
+            missing.append((f[ti], f[ji]))
+        else:
+            f[di] = str(val).replace(".", ",")
+        out.append(";".join(f))
+    if missing:
+        raise SystemExit(f"Jogadores sem minuto ({missing}) — revisar antes de gravar.")
+    open(csv_path, "w", encoding="utf-8").write("\n".join(out) + "\n")
+    print(f"GRAVADO: {len(out) - 1} jogadores.")
+
+
+if __name__ == "__main__":
+    pdf = sys.argv[1]
+    if len(sys.argv) > 2:
+        fill_csv(pdf, sys.argv[2])
+    else:
+        mins, status = compute(pdf)
+        if not mins:
+            print("Sem acréscimo armazenado para este jogo (added_time.py).")
+        else:
+            for tm, info in status.items():
+                flag = "OK" if info["ok"] else "*** REVISAR ***"
+                print(f"\n{tm}: total {info['total']}/{info['expected']} [{flag}]")
+                print(f"  entradas {info['on']}")
+                print(f"  saídas   {info['off']}")
