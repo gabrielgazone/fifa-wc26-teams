@@ -177,6 +177,13 @@ MATCHES = [
     _M("TÜRKIYE", 3, "USA", 2, "25/06/2026", round="Fase de Grupos",
        scorers="Türkiye vence nos acréscimos; EUA avançam mesmo assim"),
     _M("PARAGUAY", 0, "AUSTRALIA", 0, "25/06/2026", round="Fase de Grupos"),
+    # Rodada 3 (26/06/2026)
+    _M("NORWAY", 1, "FRANCE", 4, "26/06/2026"),
+    _M("SENEGAL", 5, "IRAQ", 0, "26/06/2026"),
+    _M("EGYPT", 1, "IR IRAN", 1, "26/06/2026"),
+    _M("NEW ZEALAND", 1, "BELGIUM", 5, "26/06/2026"),
+    _M("CABO VERDE", 0, "SAUDI ARABIA", 0, "26/06/2026"),
+    _M("URUGUAY", 0, "SPAIN", 1, "26/06/2026"),
 ]
 
 # índice por par de seleções (canônico)
