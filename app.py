@@ -12,9 +12,9 @@ from positions_data import (
     team_code, flag_url, team_latlon, canon,
 )
 try:
-    from technical_data import tech_for, TECH_COLS
+    from technical_data import tech_for, TECH_COLS, TECH
 except Exception:        # módulo opcional (dados técnico-táticos do PMSR)
-    tech_for, TECH_COLS = (lambda *a: None), []
+    tech_for, TECH_COLS, TECH = (lambda *a: None), [], {}
 
 # ── configuração da página ────────────────────────────────────────────────────
 st.set_page_config(
@@ -827,6 +827,46 @@ def partial_spearman(x, y, z):
         return rp, np.nan, n
     tval = rp * np.sqrt(dfree / (1 - rp ** 2))
     return rp, float(2 * tdist.sf(abs(tval), dfree)), n
+
+
+# radar técnico-tático (variáveis "quanto maior, mais") e fases de jogo
+TECH_RADAR = ["Posse (%)", "xG", "Finalizações", "Acerto passe (%)", "Line breaks",
+              "Progressões", "Recep. terço final", "Pressões def.", "Turnovers forçados"]
+PHASE_IN = ["Construção livre (%)", "Construção pressionada (%)", "Progressão fase (%)",
+            "Ataque terço final (%)", "Bola longa (%)", "Transição ofensiva (%)",
+            "Contra-ataque (%)", "Bola parada (%)"]
+PHASE_OUT = ["Pressão alta (%)", "Pressão média (%)", "Pressão baixa (%)", "Bloco alto (%)",
+             "Bloco médio (%)", "Bloco baixo (%)", "Recuperação (%)", "Transição defensiva (%)",
+             "Counter-press (%)"]
+
+
+def team_technical_profiles(team_names):
+    """Perfil técnico-tático MÉDIO por seleção (média entre seus jogos), a partir do
+    technical_data, com PPDA e Field tilt derivados (ajuste pela posse do adversário).
+    Índice = nome de exibição; colunas = TECH_COLS + PPDA + Field tilt (%)."""
+    want = {canon(t): t for t in team_names}
+    bucket = {}
+    for entry in TECH.values():
+        names = list(entry.keys())
+        if len(names) != 2:
+            continue
+        a, b = names
+        for tm, opp in ((a, b), (b, a)):
+            if tm not in want:
+                continue
+            s, op = dict(entry[tm]), entry[opp]
+            if op.get("Passes") and s.get("Pressões def."):
+                s["PPDA"] = op["Passes"] / s["Pressões def."]   # passes do rival / pressões
+            ra, rb = s.get("Recep. terço final"), op.get("Recep. terço final")
+            if ra is not None and rb is not None and (ra + rb) > 0:
+                s["Field tilt (%)"] = 100 * ra / (ra + rb)      # domínio territorial
+            bucket.setdefault(want[tm], []).append(s)
+    if not bucket:
+        return pd.DataFrame()
+    cols = list(TECH_COLS) + ["PPDA", "Field tilt (%)"]
+    rows = {disp: {c: np.nanmean([x.get(c, np.nan) for x in lst]) for c in cols}
+            for disp, lst in bucket.items()}
+    return pd.DataFrame(rows).T
 
 
 def render_kpis(df):
@@ -1690,6 +1730,7 @@ with tab_dest:
         # ---- #3 DNA + #4 CONFRONTO -----------------------------------------
         with dsub[1]:
             st.subheader("🧬 DNA físico da seleção")
+            techprof = team_technical_profiles(teams_all)
             sel = []
             if not int_m or len(teams_all) < 2:
                 st.info("Carregue mais seleções para comparar o DNA físico.")
@@ -1710,6 +1751,25 @@ with tab_dest:
                     st.plotly_chart(figd, use_container_width=True)
                     st.caption("Quanto mais para a borda, mais alto o percentil da seleção "
                                "naquela métrica em relação às demais carregadas.")
+
+                    # DNA técnico-tático — mesmo conceito de percentil, outra esfera
+                    tr = [c for c in TECH_RADAR if c in techprof.columns]
+                    if tr and any(t in techprof.index for t in sel):
+                        st.markdown("**🧠 DNA técnico-tático — percentil no torneio**")
+                        tpct = techprof[tr].rank(pct=True) * 100
+                        figt = go.Figure()
+                        for tn in sel:
+                            if tn in tpct.index:
+                                figt.add_trace(go.Scatterpolar(
+                                    r=tpct.loc[tn].values, theta=tr, fill="toself",
+                                    name=team_code(tn)))
+                        figt.update_layout(
+                            polar=dict(radialaxis=dict(range=[0, 100], visible=True)),
+                            height=460)
+                        st.plotly_chart(figt, use_container_width=True)
+                        st.caption("Perfil técnico-tático médio da seleção nos seus jogos. "
+                                   "Cruzado com o radar físico acima: o time é mais 'motor' "
+                                   "(corre/sprinta) ou mais 'cérebro' (posse/xG/progressão)?")
 
             st.divider()
             st.subheader("⚔️ Simulador de confronto")
@@ -1768,6 +1828,63 @@ with tab_dest:
                     champ = ca if wa_n > wb_n else cb
                     st.success(f"**Vantagem física geral: {champ}** "
                                f"({max(wa_n, wb_n)} de {len(sdf)} variáveis)")
+
+                    # ===== camada TÉCNICO-TÁTICA do confronto =====
+                    if not techprof.empty and ta in techprof.index and tb in techprof.index:
+                        st.divider()
+                        st.markdown("**🧠 Resumo técnico-tático — vantagem por variável**")
+                        tt = []
+                        for m in TECH_RADAR + ["Field tilt (%)"]:
+                            if m not in techprof.columns:
+                                continue
+                            va, vb = techprof.loc[ta, m], techprof.loc[tb, m]
+                            if pd.notna(va) and pd.notna(vb):
+                                tt.append({"Variável": m, ca: round(va, 1), cb: round(vb, 1),
+                                           "Vantagem": ca if va > vb else cb})
+                        if "PPDA" in techprof.columns and pd.notna(techprof.loc[ta, "PPDA"]) \
+                                and pd.notna(techprof.loc[tb, "PPDA"]):
+                            va, vb = techprof.loc[ta, "PPDA"], techprof.loc[tb, "PPDA"]
+                            tt.append({"Variável": "PPDA (↓ = + pressão)", ca: round(va, 1),
+                                       cb: round(vb, 1), "Vantagem": ca if va < vb else cb})
+                        tdf = pd.DataFrame(tt)
+                        st.dataframe(tdf, hide_index=True, use_container_width=True)
+                        ta_n = int((tdf["Vantagem"] == ca).sum())
+                        tb_n = int((tdf["Vantagem"] == cb).sum())
+                        tchamp = ca if ta_n >= tb_n else cb
+                        st.caption("Médias dos jogos da seleção. **PPDA** = passes do adversário "
+                                   "por pressão (menor = pressão mais intensa). **Field tilt** = "
+                                   "domínio territorial (recepções no terço final vs o rival).")
+
+                        st.markdown("**🎭 Choque de estilos (fases de jogo)**")
+                        for title, phs in [("⚔️ Com a bola", PHASE_IN),
+                                           ("🛡️ Sem a bola", PHASE_OUT)]:
+                            ph = [c for c in phs if c in techprof.columns
+                                  and pd.notna(techprof.loc[ta, c])
+                                  and pd.notna(techprof.loc[tb, c])]
+                            if not ph:
+                                continue
+                            dfp = pd.DataFrame({"Fase": ph,
+                                                ca: [techprof.loc[ta, c] for c in ph],
+                                                cb: [techprof.loc[tb, c] for c in ph]})
+                            figp = px.bar(dfp.melt(id_vars="Fase", var_name="Seleção",
+                                                   value_name="%"),
+                                          x="Fase", y="%", color="Seleção", barmode="group",
+                                          color_discrete_sequence=["#7a1f3d", "#f0a500"],
+                                          title=title)
+                            figp.update_layout(height=360, xaxis_tickangle=-30, xaxis_title="")
+                            st.plotly_chart(figp, use_container_width=True)
+
+                        st.markdown("#### 🧭 Leitura do confronto (dois eixos)")
+                        st.info(f"**Físico:** vantagem **{champ}** ({max(wa_n, wb_n)}/{len(sdf)}) "
+                                f"· **Técnico-tático:** vantagem **{tchamp}** "
+                                f"({max(ta_n, tb_n)}/{len(tdf)}).")
+                        if champ == tchamp:
+                            st.success(f"**{champ} leva nas duas esferas** — físico e jogo "
+                                       "apontam para o mesmo lado; favorito claro no papel.")
+                        else:
+                            st.warning(f"**Choque de perfis:** **{champ}** impõe o físico, "
+                                       f"**{tchamp}** controla o jogo. O confronto se decide em "
+                                       "quem dita o ritmo — leia o choque de fases acima.")
 
         # ---- #17 COMPARADOR DE JOGADORES -----------------------------------
         with dsub[2]:
