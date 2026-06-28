@@ -184,6 +184,12 @@ MATCHES = [
     _M("NEW ZEALAND", 1, "BELGIUM", 5, "26/06/2026"),
     _M("CABO VERDE", 0, "SAUDI ARABIA", 0, "26/06/2026"),
     _M("URUGUAY", 0, "SPAIN", 1, "26/06/2026"),
+    _M("PANAMA", 0, "ENGLAND", 2, "27/06/2026"),
+    _M("CROATIA", 2, "GHANA", 1, "27/06/2026"),
+    _M("ALGERIA", 3, "AUSTRIA", 3, "27/06/2026"),
+    _M("JORDAN", 1, "ARGENTINA", 3, "27/06/2026"),
+    _M("COLOMBIA", 0, "PORTUGAL", 0, "27/06/2026"),
+    _M("CONGO DR", 3, "UZBEKISTAN", 1, "27/06/2026"),
 ]
 
 # índice por par de seleções (canônico)
