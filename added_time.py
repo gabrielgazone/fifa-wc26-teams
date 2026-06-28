@@ -30,6 +30,10 @@ ADDED_TIME = {
     _key("Egypt", "IR Iran"): (5, 6),
     # CPV 0–0 KSA · rodada 3 · 1ºT +6 (0:48 +6) · 2ºT +5 (1:52 +5) → 101 min
     _key("Cabo Verde", "Saudi Arabia"): (6, 5),
+    # PAN 0–2 ENG · rodada 3 · 1ºT +3 (2:40 +3) · 2ºT +6 (5:58 +6) → 99 min
+    _key("Panama", "England"): (3, 6),
+    # COL 0–0 POR · rodada 3 · 1ºT +3 (3:01 +3) · 2ºT +5 (4:40 +5) → 98 min
+    _key("Colombia", "Portugal"): (3, 5),
 }
 
 
