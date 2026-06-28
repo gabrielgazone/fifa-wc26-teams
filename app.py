@@ -829,6 +829,20 @@ def partial_spearman(x, y, z):
     return rp, float(2 * tdist.sf(abs(tval), dfree)), n
 
 
+def render_kpis(df):
+    """4 cartões-resumo (Partidas/Seleções/Jogadores/Linhas) — topo de cada aba."""
+    ok = isinstance(df, pd.DataFrame) and not df.empty
+    n_matches = df["Match ID"].nunique() if ok and "Match ID" in df.columns else 0
+    teams = df["Team Name"].nunique() if ok and "Team Name" in df.columns else 0
+    players = df["Player ID"].nunique() if ok and "Player ID" in df.columns else 0
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Partidas", n_matches)
+    c2.metric("Seleções", teams)
+    c3.metric("Jogadores únicos", players)
+    c4.metric("Total de linhas", f"{len(df):,}" if ok else 0)
+    st.divider()
+
+
 # ── estado global ─────────────────────────────────────────────────────────────
 if "df" not in st.session_state:
     st.session_state.df = pd.DataFrame()
@@ -925,16 +939,8 @@ with tab1:
             st.session_state.charts_pdf = []
 
     df = st.session_state.df
+    render_kpis(df)
     if not df.empty:
-        n_matches = df["Match ID"].nunique() if "Match ID" in df.columns else "—"
-        teams     = df["Team Name"].nunique() if "Team Name" in df.columns else "—"
-        players   = df["Player ID"].nunique() if "Player ID" in df.columns else "—"
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Partidas", n_matches)
-        c2.metric("Seleções", teams)
-        c3.metric("Jogadores únicos", players)
-        c4.metric("Total de linhas", f"{len(df):,}")
-
         # ── painel de contexto por partida ────────────────────────────────
         if "Match ID" in df.columns:
             match_ids = df["Match ID"].dropna().unique().tolist()
@@ -1018,6 +1024,7 @@ with tab1:
 # ════════════════════════════════════════════════════════════════════════════
 with tab2:
     df = st.session_state.df
+    render_kpis(df)
     if df.empty:
         st.info("Carregue arquivos na aba **Upload** primeiro.")
     else:
@@ -1069,6 +1076,7 @@ with tab2:
 # ════════════════════════════════════════════════════════════════════════════
 with tab3:
     df = st.session_state.df
+    render_kpis(df)
     if df.empty:
         st.info("Carregue arquivos na aba **Upload** primeiro.")
     else:
@@ -1651,6 +1659,7 @@ with tab3:
 # ════════════════════════════════════════════════════════════════════════════
 with tab_dest:
     df0 = st.session_state.df
+    render_kpis(df0)
     if df0.empty:
         st.info("Carregue arquivos na aba **Upload** primeiro.")
     elif "Team Name" not in df0.columns:
@@ -1663,17 +1672,9 @@ with tab_dest:
         has_res = "Resultado" in d.columns and d["Resultado"].notna().any()
         full = all(c in d.columns for c in SPEED_ZONES.values())
 
-        def match_label(mid):
-            entry, teams = match_entry(d, mid)
-            if entry:
-                a, b = entry.get("teams", (teams + ["?", "?"])[:2])
-                return f"{a} {entry.get('score', '')} {b}"
-            return " × ".join(team_code(t) for t in teams) if teams else str(mid)
-
         dsub = st.tabs([
-            "📝 Scout Report", "🧬 DNA & Confronto", "🆚 Comparador", "⭐ XI ideal",
-            "🗺️ Mapa-múndi", "🐝 Distribuição", "📈 Evolução", "🔮 Preditivo",
-            "🎬 Apresentação",
+            "📝 Scout Report", "🧬 DNA & Confronto", "🆚 Comparador",
+            "🐝 Distribuição", "📈 Evolução", "🔮 Preditivo",
         ])
 
         # ---- #1 SCOUT REPORT ------------------------------------------------
@@ -1818,84 +1819,8 @@ with tab_dest:
                     st.success(f"**Mais completo fisicamente: {champ}** "
                                f"({max(wa_n, wb_n)} de {len(sdf)} variáveis)")
 
-        # ---- #16 XI IDEAL FÍSICO -------------------------------------------
+        # ---- BEESWARM / DISTRIBUIÇÃO ---------------------------------------
         with dsub[3]:
-            st.subheader("⭐ XI ideal físico (4-3-3)")
-            if not has_pos or not int_m:
-                st.info("É preciso ter posições e métricas para montar o XI.")
-            else:
-                xi_metric = st.selectbox("Critério de seleção", int_m, key="xi_metric")
-                formation = {"GK": 1, "DF": 4, "MF": 3, "FW": 3}
-                coords = {
-                    "GK": [(50, 7)], "DF": [(16, 28), (38, 25), (62, 25), (84, 28)],
-                    "MF": [(25, 52), (50, 50), (75, 52)],
-                    "FW": [(25, 80), (50, 84), (75, 80)],
-                }
-                figx = go.Figure()
-                figx.add_shape(type="rect", x0=0, y0=0, x1=100, y1=100,
-                               line=dict(color="white"), fillcolor="#2e8b57", layer="below")
-                figx.add_shape(type="line", x0=0, y0=50, x1=100, y1=50, line=dict(color="white"))
-                figx.add_shape(type="circle", x0=38, y0=38, x1=62, y1=62, line=dict(color="white"))
-                pcols = [c for c in ["Player Name", "Team Name", "Posição (nome)", xi_metric]
-                         if c in d.columns]
-                gcols = [c for c in ["Player Name", "Team Name", "Posição", "Posição (nome)"]
-                         if c in d.columns]
-                # 1 linha por jogador (média por jogo) p/ ninguém aparecer 2x
-                xi_base = (d.dropna(subset=[xi_metric, "Posição"])
-                           .groupby(gcols, as_index=False)[xi_metric].mean())
-                chosen = []
-                for pos, n in formation.items():
-                    pool = xi_base[xi_base["Posição"] == pos].nlargest(n, xi_metric)
-                    for (xc, yc), (_, pl) in zip(coords[pos], pool.iterrows()):
-                        chosen.append(pl)
-                        figx.add_trace(go.Scatter(
-                            x=[xc], y=[yc], mode="markers+text",
-                            marker=dict(size=26, color="#7a1f3d",
-                                        line=dict(color="white", width=2)),
-                            text=[f"{pl['Player Name'].split()[-1]}<br>{team_code(pl['Team Name'])}"],
-                            textposition="bottom center", textfont=dict(size=9, color="white"),
-                            hovertext=f"{pl['Player Name']} ({pl[xi_metric]:.1f})",
-                            showlegend=False))
-                figx.update_layout(
-                    title=f"XI físico por {xi_metric}", height=620,
-                    xaxis=dict(visible=False, range=[-2, 102]),
-                    yaxis=dict(visible=False, range=[-4, 104]),
-                    plot_bgcolor="#2e8b57")
-                st.plotly_chart(figx, use_container_width=True)
-                if chosen:
-                    st.dataframe(pd.DataFrame(chosen)[pcols].reset_index(drop=True),
-                                 hide_index=True, use_container_width=True)
-
-        # ---- #8 MAPA-MÚNDI -------------------------------------------------
-        with dsub[4]:
-            st.subheader("🗺️ Mapa-múndi do torneio")
-            tt = team_match_totals(d, ["Total Distance (m)", "Z4+Z5 (m)", "25+ km/h (m)"])
-            if tt.empty:
-                st.info("Dados de distância indisponíveis.")
-            else:
-                opt_map = {"Distância total (km)": ("Total Distance (m)", 1000)}
-                if "Z4+Z5 (m)" in tt.columns:
-                    opt_map["Alta intensidade Z4+Z5 (m)"] = ("Z4+Z5 (m)", 1)
-                if "25+ km/h (m)" in tt.columns:
-                    opt_map["Sprint Z5 (m)"] = ("25+ km/h (m)", 1)
-                lbl = st.selectbox("Métrica", list(opt_map), key="map_metric")
-                col, div = opt_map[lbl]
-                agg = (tt.groupby("Team Name")[col].mean() / div).reset_index()
-                agg["lat"] = agg["Team Name"].map(lambda t: (team_latlon(t) or (None, None))[0])
-                agg["lon"] = agg["Team Name"].map(lambda t: (team_latlon(t) or (None, None))[1])
-                agg["code"] = agg["Team Name"].map(team_code)
-                agg = agg.dropna(subset=["lat", "lon"])
-                figmap = px.scatter_geo(
-                    agg, lat="lat", lon="lon", color=col, size=col, text="code",
-                    hover_name="Team Name", projection="natural earth",
-                    color_continuous_scale="YlOrRd",
-                    title=f"{lbl} por seleção")
-                figmap.update_traces(textposition="top center")
-                figmap.update_layout(height=520)
-                st.plotly_chart(figmap, use_container_width=True)
-
-        # ---- #9 BEESWARM / DISTRIBUIÇÃO ------------------------------------
-        with dsub[5]:
             st.subheader("🐝 Distribuição (beeswarm)")
             st.caption("Cada ponto é um jogador — revela a dispersão real, não só a média.")
             groups = ([("Resultado", "Resultado")] if has_res else []) + \
@@ -1916,8 +1841,8 @@ with tab_dest:
                 figb.update_layout(height=460, showlegend=False)
                 st.plotly_chart(figb, use_container_width=True)
 
-        # ---- #5 EVOLUÇÃO / BUMP CHART --------------------------------------
-        with dsub[6]:
+        # ---- EVOLUÇÃO / BUMP CHART -----------------------------------------
+        with dsub[4]:
             st.subheader("📈 Evolução do ranking ao longo da Copa")
             st.caption("Fica mais rico a cada rodada que você carregar. Ranking por jogo "
                        "acumulado de cada seleção.")
@@ -1977,8 +1902,8 @@ with tab_dest:
                     st.info("Com apenas 1 rodada o ranking é estático. Suba as próximas "
                             "rodadas para ver as seleções subindo e descendo. 📈")
 
-        # ---- #13 MODELO PREDITIVO ------------------------------------------
-        with dsub[7]:
+        # ---- MODELO PREDITIVO ----------------------------------------------
+        with dsub[5]:
             st.subheader("🔮 O físico prevê o resultado?")
             if not has_res or not int_m:
                 st.info("É preciso ter resultado e métricas físicas.")
@@ -2020,72 +1945,13 @@ with tab_dest:
                     except Exception as e:
                         st.warning(f"Não foi possível treinar o modelo: {e}")
 
-        # ---- #15 MODO APRESENTAÇÃO -----------------------------------------
-        with dsub[8]:
-            st.subheader("🎬 Apresentação — o jogo em 5 telas")
-            if "Match ID" not in d.columns:
-                st.info("Sem partidas para apresentar.")
-            else:
-                mids = sorted(d["Match ID"].dropna().unique())
-                mid = st.selectbox("Partida", mids, format_func=match_label, key="story_mid")
-                info, _ = match_entry(d, mid)
-                dm = d[d["Match ID"] == mid]
-                teams_m = dm["Team Name"].dropna().unique().tolist()
-                step = st.radio("Tela", [1, 2, 3, 4, 5], horizontal=True,
-                                format_func=lambda s: f"{s}", key="story_step")
-
-                if step == 1:
-                    if info:
-                        a, b = info.get("teams", (teams_m + ["?", "?"])[:2])
-                        st.markdown(f"## {a} {info.get('score','')} {b}")
-                        st.caption(f"📅 {info.get('date','')} · {info.get('round','')}")
-                        if info.get("scorers"):
-                            st.markdown(f"**⚽ {info['scorers']}**")
-                    st.markdown("#### Comece pela história física desta partida ➡️")
-                elif step == 2 and "Total Distance (m)" in dm:
-                    tot = (dm.groupby("Team Name")["Total Distance (m)"].sum() / 1000).reset_index()
-                    fig = px.bar(tot, x="Team Name", y="Total Distance (m)", text_auto=".1f",
-                                 color="Team Name",
-                                 color_discrete_sequence=["#7a1f3d", "#f0a500"],
-                                 title="Distância total da equipe (km)")
-                    fig.update_layout(showlegend=False, height=420)
-                    st.plotly_chart(fig, use_container_width=True)
-                elif step == 3 and "Z4+Z5 (m)" in dm:
-                    hi = dm.groupby("Team Name")["Z4+Z5 (m)"].sum().reset_index()
-                    fig = px.bar(hi, x="Team Name", y="Z4+Z5 (m)", text_auto=".0f",
-                                 color="Team Name",
-                                 color_discrete_sequence=["#7a1f3d", "#f0a500"],
-                                 title="Alta intensidade ≥20 km/h (m)")
-                    fig.update_layout(showlegend=False, height=420)
-                    st.plotly_chart(fig, use_container_width=True)
-                elif step == 4 and "Distância/min" in dm and teams_m:
-                    st.markdown("#### Destaques físicos")
-                    cols = st.columns(len(teams_m))
-                    for box, tm_ in zip(cols, teams_m):
-                        sub = dm[dm["Team Name"] == tm_]
-                        top = sub.loc[sub["Distância/min"].idxmax()]
-                        box.metric(f"{team_code(tm_)} — {top['Player Name']}",
-                                   f"{top['Distância/min']:.1f} m/min")
-                elif step == 5:
-                    st.markdown("#### Conclusão")
-                    if "Total Distance (m)" in dm and len(teams_m) == 2:
-                        tot = dm.groupby("Team Name")["Total Distance (m)"].sum() / 1000
-                        mais = tot.idxmax()
-                        st.success(f"**{mais}** percorreu mais no total "
-                                   f"({tot.max():.1f} km vs {tot.min():.1f} km).")
-                    if has_res and dm["Resultado"].notna().any():
-                        venc = dm[dm["Resultado"] == "Vitória"]["Team Name"].unique()
-                        if len(venc):
-                            st.info(f"🏆 Vencedor da partida: **{venc[0]}**")
-                else:
-                    st.info("Esta tela precisa de uma métrica indisponível nos dados.")
-
 
 # ════════════════════════════════════════════════════════════════════════════
 # ABA 🧩 — Análise Contextual (físico × técnico-tático)
 # ════════════════════════════════════════════════════════════════════════════
 with tab_ctx:
     df0 = st.session_state.df
+    render_kpis(df0)
     if df0.empty:
         st.info("Carregue arquivos na aba **Upload** primeiro.")
     else:
@@ -2389,6 +2255,7 @@ with tab_ctx:
 # ════════════════════════════════════════════════════════════════════════════
 with tab4:
     df = st.session_state.df
+    render_kpis(df)
     if df.empty:
         st.info("Carregue arquivos na aba **Upload** primeiro.")
     else:
@@ -2476,6 +2343,7 @@ with tab4:
 # ════════════════════════════════════════════════════════════════════════════
 with tab5:
     df = st.session_state.df
+    render_kpis(df)
     if df.empty:
         st.info("Carregue arquivos na aba **Upload** primeiro.")
     else:
