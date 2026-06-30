@@ -190,6 +190,8 @@ MATCHES = [
     _M("JORDAN", 1, "ARGENTINA", 3, "27/06/2026"),
     _M("COLOMBIA", 0, "PORTUGAL", 0, "27/06/2026"),
     _M("CONGO DR", 3, "UZBEKISTAN", 1, "27/06/2026"),
+    # ── Mata-mata · Round of 32 ──
+    _M("SOUTH AFRICA", 0, "CANADA", 1, "28/06/2026", round="Round of 32"),
 ]
 
 # índice por par de seleções (canônico)

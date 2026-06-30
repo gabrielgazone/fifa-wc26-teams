@@ -42,6 +42,9 @@ ADDED_TIME = {
     _key("Jordan", "Argentina"): (5, 5),
     # COD 3–1 UZB · rodada 3 · 1ºT +7 (6:59 +7) · 2ºT +8 (8:02 +8) → 105 min
     _key("Congo DR", "Uzbekistan"): (7, 8),
+    # --- Mata-mata (Round of 32) ---
+    # RSA 0–1 CAN · 1ºT +3 (3:10 +3) · 2ºT +5 (6:22 +5) → 98 min
+    _key("South Africa", "Canada"): (3, 5),
 }
 
 
