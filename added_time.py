@@ -50,7 +50,8 @@ ADDED_TIME = {
     # Prorrogação: tupla de 4 (a1, a2, a3, a4) = 1ºT, 2ºT, 1º ET, 2º ET.
     # GER 1–1 PAR (pên.) · 5/5/+4(105:00)/+2(120:00) → 120+16 = 136 min
     _key("Germany", "Paraguay"): (5, 5, 4, 2),
-    # NED 1–1 MAR (pên.) · 6/6/?/+1 → falta o acréscimo do 1º ET (105:00)
+    # NED 1–1 MAR (pên.) · 6/6/+0(105:00)/+1(120:00) → 120+13 = 133 min
+    _key("Netherlands", "Morocco"): (6, 6, 0, 1),
 }
 
 
