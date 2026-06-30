@@ -45,6 +45,10 @@ ADDED_TIME = {
     # --- Mata-mata (Round of 32) ---
     # RSA 0–1 CAN · 1ºT +3 (3:10 +3) · 2ºT +5 (6:22 +5) → 98 min
     _key("South Africa", "Canada"): (3, 5),
+    # BRA 2–1 JPN · 1ºT +4 (3:51 +4) · 2ºT +6 (10:35 +6) → 100 min
+    _key("Brazil", "Japan"): (4, 6),
+    # GER 1–1 PAR e NED 1–1 MAR foram para PRORROGAÇÃO + pênaltis (120'+):
+    # os minutos exigem o modelo de prorrogação; aguardando relógios completos.
 }
 
 

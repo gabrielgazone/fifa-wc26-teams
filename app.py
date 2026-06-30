@@ -192,6 +192,11 @@ MATCHES = [
     _M("CONGO DR", 3, "UZBEKISTAN", 1, "27/06/2026"),
     # ── Mata-mata · Round of 32 ──
     _M("SOUTH AFRICA", 0, "CANADA", 1, "28/06/2026", round="Round of 32"),
+    _M("BRAZIL", 2, "JAPAN", 1, "29/06/2026", round="Round of 32"),
+    _M("GERMANY", 1, "PARAGUAY", 1, "29/06/2026", round="Round of 32",
+       scorers="1–1 no tempo normal; decidido nos pênaltis (prorrogação)"),
+    _M("NETHERLANDS", 1, "MOROCCO", 1, "29/06/2026", round="Round of 32",
+       scorers="1–1 no tempo normal; decidido nos pênaltis (prorrogação)"),
 ]
 
 # índice por par de seleções (canônico)
