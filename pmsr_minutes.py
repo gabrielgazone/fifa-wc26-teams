@@ -23,12 +23,12 @@ import fitz
 from added_time import added_time_for
 from positions_data import canon
 
-MIN = re.compile(r"^(?:90\+\d+|45\+\d+|\d{1,2})'$")
+MIN = re.compile(r"^(?:120\+\d+|105\+\d+|90\+\d+|45\+\d+|\d{1,3})'$")
 POSRE = re.compile(r"^(GK|DF|MF|FW)(\d*)$")
 
 
 def _reg(mtok):
-    """'83'' -> 83 ; '90+4'' -> 90 ; '45+2'' -> 45 (minuto de regulamento)."""
+    """'83'' -> 83 ; '90+4'' -> 90 ; '120+2'' -> 120 (minuto de regulamento)."""
     s = mtok.rstrip("'")
     return int(s.split("+")[0]) if "+" in s else int(s)
 
@@ -81,12 +81,18 @@ def _players(R, side, y0, y1):
     return res
 
 
-def _team_minutes(starters, reserves, a1, a2):
-    """-> (dict jersey->minutos, info de validação)."""
-    T = 90 + a1 + a2
+def _team_minutes(starters, reserves, added):
+    """added = (a1,a2) tempo normal OU (a1,a2,a3,a4) com prorrogação.
+    -> (dict jersey->minutos, info de validação)."""
+    bounds = [45, 90, 105, 120][:len(added)]          # fim de cada período (regulamento)
+    T = bounds[-1] + sum(added)                        # duração total da partida
+    # o acréscimo do ÚLTIMO período é a fase final (sem intervalo depois): só
+    # conta para quem ficou em campo (full = T). Quem saiu no minuto exato da
+    # troca antes desse período não o joga -> usa só as fronteiras de intervalo.
+    breaks = bounds[:-1]
 
-    def off_played(m):                                # minutos de quem saiu em m
-        return m + (a1 if m >= 45 else 0)
+    def off_played(m):                                # minutos de quem saiu no minuto m
+        return m + sum(a for a, bnd in zip(added, breaks) if m >= bnd)
 
     on = [(j, min(ms)) for j, ms in reserves if ms]   # reserva entrou no MENOR minuto
     pool = {j: list(ms) for j, ms in starters}
@@ -120,12 +126,11 @@ def compute(pdf_path):
     at = added_time_for(tA, tB)
     if not at:
         return None, None
-    a1, a2 = at
     out, status = {}, {}
     for nm, side in [(tA, "A"), (tB, "B")]:
         st = _players(R, side, h[side + "_start"], h[side + "_sub"])
         rv = _players(R, side, h[side + "_sub"], 99999)
-        mins, info = _team_minutes(st, rv, a1, a2)
+        mins, info = _team_minutes(st, rv, tuple(at))
         out[canon(nm)], status[canon(nm)] = mins, info
     return out, status
 

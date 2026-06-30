@@ -47,8 +47,10 @@ ADDED_TIME = {
     _key("South Africa", "Canada"): (3, 5),
     # BRA 2–1 JPN · 1ºT +4 (3:51 +4) · 2ºT +6 (10:35 +6) → 100 min
     _key("Brazil", "Japan"): (4, 6),
-    # GER 1–1 PAR e NED 1–1 MAR foram para PRORROGAÇÃO + pênaltis (120'+):
-    # os minutos exigem o modelo de prorrogação; aguardando relógios completos.
+    # Prorrogação: tupla de 4 (a1, a2, a3, a4) = 1ºT, 2ºT, 1º ET, 2º ET.
+    # GER 1–1 PAR (pên.) · 5/5/+4(105:00)/+2(120:00) → 120+16 = 136 min
+    _key("Germany", "Paraguay"): (5, 5, 4, 2),
+    # NED 1–1 MAR (pên.) · 6/6/?/+1 → falta o acréscimo do 1º ET (105:00)
 }
 
 
@@ -58,6 +60,8 @@ def added_time_for(team_a, team_b):
 
 
 def total_minutes(team_a, team_b):
-    """Duração de um jogo completo (90 + acréscimos), ou None."""
+    """Duração total (90 + acréscimos; 120 + acréscimos se houve prorrogação)."""
     at = added_time_for(team_a, team_b)
-    return 90 + at[0] + at[1] if at else None
+    if not at:
+        return None
+    return (90 if len(at) == 2 else 120) + sum(at)
