@@ -1609,52 +1609,6 @@ with tab3:
             else:
                 st.info("Dados insuficientes para clustering.")
 
-            st.subheader("📈 #8 O que se associa a vencer?")
-            if has_result and "Pontos" in df_a.columns and intensity_metrics:
-                st.caption("Correlação de Spearman entre a média de cada métrica por equipe e os "
-                           "pontos (3 vitória / 1 empate / 0 derrota).")
-                team_agg = (df_a.dropna(subset=["Pontos"])
-                            .groupby(["Team Name", "Match ID"])
-                            .agg({**{m: "mean" for m in intensity_metrics}, "Pontos": "first"})
-                            .reset_index())
-                if len(team_agg) >= 4:
-                    corr = (team_agg[intensity_metrics + ["Pontos"]]
-                            .corr(method="spearman")["Pontos"].drop("Pontos").sort_values())
-                    fig_corr = px.bar(x=corr.values, y=corr.index, orientation="h",
-                                      labels={"x": "ρ de Spearman", "y": ""},
-                                      color=corr.values, color_continuous_scale="RdBu",
-                                      range_color=[-1, 1],
-                                      title="Correlação (Spearman) com pontos")
-                    st.plotly_chart(fig_corr, use_container_width=True)
-                    st.caption(f"n = {len(team_agg)} equipes-jogo. Correlação não implica "
-                               "causalidade; amostra pequena exige cautela.")
-                    charts_pdf.append(("Correlação com resultado", None))
-                else:
-                    st.info("Carregue mais partidas para esta análise (mín. 4 equipes-jogo).")
-            else:
-                st.info("Sem dados de resultado para correlacionar.")
-
-            st.subheader("🎯 #9 Benchmark vs torneio")
-            if "Team Name" in df.columns and intensity_metrics:
-                st.caption("Percentil de uma seleção comparada às demais carregadas.")
-                try:
-                    base_team = add_derived(df).groupby("Team Name")[intensity_metrics].mean()
-                    if len(base_team) >= 3:
-                        team_sel = st.selectbox("Seleção", sorted(base_team.index), key="adv_bm")
-                        pct = base_team.rank(pct=True).loc[team_sel] * 100
-                        bm = pd.DataFrame({"Métrica": pct.index, "Percentil": pct.values.round(0)})
-                        fig_bm = px.bar(bm, x="Percentil", y="Métrica", orientation="h",
-                                        range_x=[0, 100], color="Percentil",
-                                        color_continuous_scale="Greens",
-                                        title=f"{team_sel} — percentil por métrica")
-                        fig_bm.add_vline(x=50, line_dash="dash", line_color="gray")
-                        st.plotly_chart(fig_bm, use_container_width=True)
-                        charts_pdf.append((f"Benchmark — {team_sel}", None))
-                    else:
-                        st.info("Carregue ao menos 3 seleções para o benchmark.")
-                except Exception:
-                    st.info("Benchmark indisponível para os dados atuais.")
-
         # ===================================================================
         # JOGADOR
         # ===================================================================
@@ -1663,15 +1617,42 @@ with tab3:
                 st.subheader("👤 Perfil individual")
                 jog = st.selectbox("Jogador", sorted(df_a["Player Name"].dropna().unique()),
                                    key="pl_sel")
-                row = df_a[df_a["Player Name"] == jog].iloc[0]
-                pos_lbl = row.get("Posição (nome)") if pd.notna(row.get("Posição (nome)")) else "—"
-                camisa = int(row["Jersey #"]) if pd.notna(row.get("Jersey #")) else "—"
-                st.caption(f"{row.get('Team Name','')} · {pos_lbl} · camisa {camisa}")
+                prows = df_a[df_a["Player Name"] == jog]
+                mids = list(prows["Match ID"].dropna().unique()) if "Match ID" in prows.columns else []
+                njg = len(mids)
+                opts, labelmap = ["Média por jogo"], {}
+                for mid in mids:
+                    rr = prows[prows["Match ID"] == mid].iloc[0]
+                    adv = rr.get("Adversário")
+                    lbl = ("vs " + str(adv)) if (adv is not None and pd.notna(adv)) else f"Jogo {mid}"
+                    res = rr.get("Resultado")
+                    if res is not None and pd.notna(res):
+                        lbl += f" · {res}"
+                    opts.append(lbl)
+                    labelmap[lbl] = mid
+                choice = st.selectbox("Jogo", opts, key="pl_game") if njg > 1 else "Média por jogo"
+                meta = prows.iloc[0]
+                if choice == "Média por jogo":
+                    row = prows.mean(numeric_only=True)
+                    maxsp = prows["Max Speed (km/h)"].max() if "Max Speed (km/h)" in prows.columns else np.nan
+                    st.info(f"📊 Mostrando a **média por jogo** de **{njg} partida(s)** — cada número "
+                            "é a média de UM jogo, **não o total somado da Copa**. "
+                            "(Vel. máx. = maior pico no torneio.) Escolha em **Jogo** para ver uma "
+                            "partida específica.")
+                else:
+                    row = prows[prows["Match ID"] == labelmap[choice]].iloc[0]
+                    maxsp = row.get("Max Speed (km/h)")
+                    st.info(f"📊 Valores de **um único jogo**: {choice}.")
+                pos_lbl = meta.get("Posição (nome)") if pd.notna(meta.get("Posição (nome)")) else "—"
+                camisa = int(meta["Jersey #"]) if pd.notna(meta.get("Jersey #")) else "—"
+                st.caption(f"{meta.get('Team Name','')} · {pos_lbl} · camisa {camisa}")
+                suf = " / jogo" if choice == "Média por jogo" else ""
                 pcols = st.columns(4)
-                pcols[0].metric("Distância", f"{row.get('Total Distance (m)', 0):,.0f} m")
+                pcols[0].metric("Distância" + suf, f"{row.get('Total Distance (m)', 0):,.0f} m")
                 pcols[1].metric("Intensidade", f"{row.get('Distância/min', float('nan')):.1f} m/min")
-                pcols[2].metric("Vel. máx.", f"{row.get('Max Speed (km/h)', 0):.1f} km/h")
-                pcols[3].metric("Sprints", f"{int(row.get('# Sprints', 0))}")
+                pcols[2].metric("Vel. máx." + (" (pico)" if choice == "Média por jogo" else ""),
+                                f"{maxsp:.1f} km/h" if pd.notna(maxsp) else "—")
+                pcols[3].metric("Sprints" + suf, f"{row.get('# Sprints', 0):.0f}")
 
                 dur = row.get("Total Duration (min)", np.nan)
                 vals = [row[c] / dur if dur else 0 for c in zone_cols]
@@ -1682,10 +1663,10 @@ with tab3:
                 st.plotly_chart(fig_rad, use_container_width=True)
                 charts_pdf.append((f"Perfil individual — {jog}", None))
 
-                if has_position and pd.notna(row.get("Posição")):
-                    peers = df_a[df_a["Posição"] == row["Posição"]]
-                    st.markdown(f"**Percentil entre {POSITION_LABELS.get(row['Posição'])}s "
-                                f"(n={len(peers)})**")
+                if has_position and pd.notna(meta.get("Posição")):
+                    peers = df_a[df_a["Posição"] == meta["Posição"]]
+                    st.markdown(f"**Percentil entre {POSITION_LABELS.get(meta['Posição'])}s "
+                                f"(n={len(peers)} jogos)** — {'média' if choice == 'Média por jogo' else 'este jogo'} vs os pares")
                     prow = {}
                     for m in intensity_metrics:
                         if m in peers and peers[m].notna().sum() > 1 and pd.notna(row.get(m)):
