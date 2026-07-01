@@ -1721,26 +1721,99 @@ with tab_dest:
         has_pos = "Posição" in d.columns and d["Posição"].notna().any()
         has_res = "Resultado" in d.columns and d["Resultado"].notna().any()
         full = all(c in d.columns for c in SPEED_ZONES.values())
+        techprof = team_technical_profiles(teams_all)          # perfil técnico compartilhado
+        phys_pct = (d.groupby("Team Name")[int_m].mean().rank(pct=True) * 100
+                    if int_m else pd.DataFrame())               # percentil físico por seleção
 
         dsub = st.tabs([
             "📝 Scout Report", "🧬 DNA & Confronto", "🆚 Comparador",
-            "🐝 Distribuição", "📈 Evolução", "🔮 Preditivo",
+            "🐝 Distribuição", "📈 Evolução",
         ])
 
-        # ---- #1 SCOUT REPORT ------------------------------------------------
+        # ---- #1 SCOUT REPORT (aprofundado) ---------------------------------
         with dsub[0]:
-            st.subheader("📝 Scout Report automático")
-            st.caption("Resumo em texto do perfil físico da seleção, pronto para a comissão técnica.")
+            st.subheader("📝 Scout Report da seleção")
             t = st.selectbox("Seleção", teams_all, key="scout_team")
+            dt = d[d["Team Name"] == t]
+            recs = dt.drop_duplicates("Match ID")
+
+            fu = flag_url(t)
+            hc = st.columns([1, 8])
+            if fu:
+                hc[0].image(fu, width=72)
+            hc[1].markdown(f"## {t}")
+
+            # KPIs de resultado
+            njogos = recs["Match ID"].nunique()
+            if has_res and "Resultado" in recs.columns:
+                v = int((recs["Resultado"] == "Vitória").sum())
+                emp = int((recs["Resultado"] == "Empate").sum())
+                der = int((recs["Resultado"] == "Derrota").sum())
+                gf = int(recs["Gols Marcados"].sum()) if "Gols Marcados" in recs.columns else 0
+                ga = int(recs["Gols Sofridos"].sum()) if "Gols Sofridos" in recs.columns else 0
+                pts = int(recs["Pontos"].sum()) if "Pontos" in recs.columns else 0
+                k = st.columns(5)
+                k[0].metric("Jogos", njogos)
+                k[1].metric("V–E–D", f"{v}–{emp}–{der}")
+                k[2].metric("Gols (pró–contra)", f"{gf}–{ga}")
+                k[3].metric("Saldo", f"{gf - ga:+d}")
+                k[4].metric("Pontos", pts)
+            else:
+                st.metric("Jogos", njogos)
+            # KPIs técnico-táticos
+            if t in techprof.index:
+                kk = st.columns(4)
+                for box, (m, fmt, suf) in zip(kk, [("Posse (%)", ".0f", "%"), ("xG", ".2f", ""),
+                                                   ("Finalizações", ".0f", ""), ("PPDA", ".1f", "")]):
+                    if m in techprof.columns and pd.notna(techprof.loc[t, m]):
+                        box.metric(m, f"{techprof.loc[t, m]:{fmt}}{suf}")
+
+            # perfil no torneio — percentil físico + técnico (vs todas as seleções)
+            st.markdown("**📊 Perfil no torneio — percentil (0 = pior · 100 = melhor)**")
+            prof = {}
+            if not phys_pct.empty and t in phys_pct.index:
+                for m in int_m:
+                    prof[m] = phys_pct.loc[t, m]
+            tr = [c for c in TECH_RADAR if c in techprof.columns]
+            if tr and t in techprof.index:
+                tpct = techprof[tr].rank(pct=True) * 100
+                for m in tr:
+                    prof["⚽ " + m] = tpct.loc[t, m]
+            pf = pd.DataFrame({"Métrica": list(prof), "Percentil": list(prof.values())}).dropna()
+            if not pf.empty:
+                pf = pf.sort_values("Percentil")
+                figpr = px.bar(pf, x="Percentil", y="Métrica", orientation="h",
+                               color="Percentil", color_continuous_scale="RdYlGn",
+                               range_color=[0, 100], text_auto=".0f",
+                               title=f"Onde {team_code(t)} se destaca — e onde fica devendo")
+                figpr.add_vline(x=50, line_dash="dash", line_color="gray")
+                figpr.update_layout(height=max(400, 24 * len(pf)), coloraxis_showscale=False)
+                st.plotly_chart(figpr, use_container_width=True)
+                st.caption("Percentil vs todas as seleções carregadas (físico + ⚽ técnico-tático). "
+                           "Linha tracejada = mediana. Verde/direita = ponto forte; "
+                           "vermelho/esquerda = ponto a melhorar.")
+
+            # campanha (resultados jogo a jogo)
+            if has_res and "Resultado" in recs.columns:
+                st.markdown("**📅 Campanha**")
+                cor = {"Vitória": "🟢", "Empate": "🟡", "Derrota": "🔴"}
+                rrows = [{"": cor.get(r.get("Resultado"), ""),
+                          "Adversário": r.get("Adversário", "?"),
+                          "Placar": f"{int(r.get('Gols Marcados', 0))}–{int(r.get('Gols Sofridos', 0))}",
+                          "Resultado": r.get("Resultado", "?")}
+                         for _, r in recs.sort_values("Match ID").iterrows()]
+                st.dataframe(pd.DataFrame(rrows), hide_index=True, use_container_width=True)
+
+            # relatório em texto (para a comissão) + download
             md = scout_report(df0, t)
-            st.markdown(md)
+            with st.expander("📄 Relatório em texto (pronto para a comissão técnica)"):
+                st.markdown(md)
             st.download_button("⬇️ Baixar relatório (.md)", md.encode("utf-8"),
                                f"scout_{team_code(t)}.md", "text/markdown")
 
         # ---- #3 DNA + #4 CONFRONTO -----------------------------------------
         with dsub[1]:
             st.subheader("🧬 DNA físico da seleção")
-            techprof = team_technical_profiles(teams_all)
             sel = []
             if not int_m or len(teams_all) < 2:
                 st.info("Carregue mais seleções para comparar o DNA físico.")
@@ -2033,49 +2106,6 @@ with tab_dest:
                     st.info("Com apenas 1 rodada o ranking é estático. Suba as próximas "
                             "rodadas para ver as seleções subindo e descendo. 📈")
 
-        # ---- MODELO PREDITIVO ----------------------------------------------
-        with dsub[5]:
-            st.subheader("🔮 O físico prevê o resultado?")
-            if not has_res or not int_m:
-                st.info("É preciso ter resultado e métricas físicas.")
-            else:
-                tagg = (d.dropna(subset=["Resultado"])
-                        .groupby(["Team Name", "Match ID"])
-                        .agg({**{m: "mean" for m in int_m},
-                              "Resultado": "first"}).reset_index())
-                tagg["venceu"] = (tagg["Resultado"] == "Vitória").astype(int)
-                n, npos = len(tagg), tagg["venceu"].sum()
-                if n < 10 or npos < 3 or npos > n - 3:
-                    st.info(f"Amostra pequena/desbalanceada (n={n}, vitórias={npos}). "
-                            "Carregue mais partidas.")
-                else:
-                    try:
-                        from sklearn.preprocessing import StandardScaler
-                        from sklearn.linear_model import LogisticRegression
-                        from sklearn.model_selection import cross_val_score
-                        from sklearn.pipeline import make_pipeline
-                        X, y = tagg[int_m].fillna(tagg[int_m].mean()), tagg["venceu"]
-                        pipe = make_pipeline(StandardScaler(),
-                                             LogisticRegression(max_iter=1000))
-                        acc = cross_val_score(pipe, X, y, cv=5, scoring="accuracy").mean()
-                        pipe.fit(X, y)
-                        coef = pipe.named_steps["logisticregression"].coef_[0]
-                        cdf = (pd.DataFrame({"Métrica": int_m, "Peso": coef})
-                               .sort_values("Peso"))
-                        st.metric("Acurácia (validação cruzada 5-fold)", f"{acc*100:.0f}%",
-                                  help="Base de comparação: chutar sempre 'não venceu' acertaria "
-                                       f"{max(npos, n-npos)/n*100:.0f}%.")
-                        figp = px.bar(cdf, x="Peso", y="Métrica", orientation="h",
-                                      color="Peso", color_continuous_scale="RdBu",
-                                      title="Peso de cada métrica para prever vitória")
-                        figp.add_vline(x=0, line_color="gray")
-                        st.plotly_chart(figp, use_container_width=True)
-                        st.caption("Peso positivo (azul) = associada a vencer; negativo (vermelho) "
-                                   "= associada a não vencer. Modelo ilustrativo — amostra pequena "
-                                   "exige muita cautela; não é relação de causa e efeito.")
-                    except Exception as e:
-                        st.warning(f"Não foi possível treinar o modelo: {e}")
-
 
 # ════════════════════════════════════════════════════════════════════════════
 # ABA 🧩 — Análise Contextual (físico × técnico-tático)
@@ -2194,6 +2224,27 @@ with tab_ctx:
                     else:
                         st.info("Sem saldo de gols disponível para o diferencial.")
 
+                    with st.expander("❓ O que significam os dois valores de **p** desta aba?"):
+                        st.markdown(
+                            "Os dois **p** respondem à mesma pergunta — *\"qual a chance de isso "
+                            "ser só sorte?\"* — mas em testes diferentes:\n\n"
+                            "**1) No ranking de cima** (*O que separa quem vence de quem perde*), "
+                            "cada variável passa por um teste de **Mann-Whitney**, que compara o "
+                            "grupo das **vitórias** com o das **derrotas**. O *p* é a probabilidade "
+                            "de ver uma diferença tão grande **por acaso**, se de verdade não "
+                            "houvesse diferença. **p < 0,05** → ganha a estrela ★ (diferença "
+                            "provavelmente real).\n\n"
+                            "**2) Na dispersão de baixo** (*Diferencial vs adversário*), o *p* vem "
+                            "da **correlação de Spearman** entre o diferencial (você − adversário) "
+                            "e o saldo de gols. É a chance de a correlação observada ser **só "
+                            "coincidência**.\n\n"
+                            "**Regra prática:** p < 0,05 = provavelmente real · 0,05–0,10 = "
+                            "tendência (cautela) · > 0,10 = pode ser ruído. "
+                            "**Atenção:** um *p* pequeno **não** prova causa e efeito e **não** diz "
+                            "que o efeito é grande (isso é o tamanho de efeito — o δ ou o ρ). "
+                            "Com poucos jogos (n≈79), só efeitos de médios a grandes chegam a "
+                            "p < 0,05.")
+
             # 1) EFICIÊNCIA — custo físico do produto tático
             with csub[1]:
                 st.subheader("⚡ Eficiência: custo físico do produto tático")
@@ -2231,15 +2282,20 @@ with tab_ctx:
                                      title="Média por resultado")
                         fig.update_layout(showlegend=False, height=380)
                         cc1.plotly_chart(fig, use_container_width=True)
-                    rank = (e.dropna(subset=[pick])[["Sigla", pick]]
-                            .sort_values(pick, ascending=asc).head(12))
-                    figr = px.bar(rank, x=pick, y="Sigla", orientation="h",
-                                  color_discrete_sequence=["#f0a500"],
-                                  title=("Mais eficientes" if asc else "Mais produtivos") + " (top 12)")
-                    figr.update_layout(height=380, yaxis=dict(autorange="reversed"))
+                    # ranking por SELEÇÃO (média dos seus jogos) — 1 barra por país
+                    teamrank = (e.dropna(subset=[pick]).groupby("Sigla")[pick]
+                                .mean().sort_values(ascending=asc).head(12).reset_index())
+                    best = "Mais eficientes" if asc else "Mais produtivos"
+                    figr = px.bar(teamrank, x=pick, y="Sigla", orientation="h",
+                                  text_auto=".2f", color_discrete_sequence=["#f0a500"],
+                                  title=f"{best} — top 12 seleções")
+                    figr.update_traces(textposition="outside", cliponaxis=False)
+                    figr.update_layout(height=440, yaxis=dict(autorange="reversed"),
+                                       margin=dict(l=8, r=30))
                     cc2.plotly_chart(figr, use_container_width=True)
-                    st.caption("Equipe-jogo individuais; um mesmo país aparece mais de uma vez "
-                               "(uma por partida).")
+                    st.caption(f"**Como ler:** cada barra é a **média da seleção** em "
+                               f"'{pick}' (todos os seus jogos, 1 barra por país — antes vinha "
+                               f"1 por partida, o que embaralhava). Melhor no topo · _{note}_.")
 
             # 2) PERFIL POR QUADRANTE (com Kruskal-Wallis e IC 95%)
             with csub[2]:
