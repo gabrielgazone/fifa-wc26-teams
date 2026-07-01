@@ -57,6 +57,8 @@ ADDED_TIME = {
     _key("France", "Sweden"): (3, 4),
     # CIV 1–2 NOR · 1ºT +4 (3:57 +4) · 2ºT +7 (7:42 +7) → 101 min
     _key("CÔTE D'IVOIRE", "Norway"): (4, 7),
+    # MEX 2–0 ECU · 1ºT +5 (5:03 +5) · 2ºT +7 (8:57 +7) → 102 min
+    _key("Mexico", "Ecuador"): (5, 7),
 }
 
 

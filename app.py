@@ -199,6 +199,7 @@ MATCHES = [
        scorers="1–1 no tempo normal; decidido nos pênaltis (prorrogação)"),
     _M("FRANCE", 3, "SWEDEN", 0, "30/06/2026", round="Round of 32"),
     _M("CÔTE D'IVOIRE", 1, "NORWAY", 2, "30/06/2026", round="Round of 32"),
+    _M("MEXICO", 2, "ECUADOR", 0, "30/06/2026", round="Round of 32"),
 ]
 
 # índice por par de seleções (canônico)
