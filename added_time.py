@@ -52,6 +52,11 @@ ADDED_TIME = {
     _key("Germany", "Paraguay"): (5, 5, 4, 2),
     # NED 1–1 MAR (pên.) · 6/6/+0(105:00)/+1(120:00) → 120+13 = 133 min
     _key("Netherlands", "Morocco"): (6, 6, 0, 1),
+    # (placares/acréscimos guardados antes dos PDFs — 30/06/2026)
+    # FRA 3–0 SUE · 1ºT +3 (3:51 +3) · 2ºT +4 (3:51 +4) → 97 min
+    _key("France", "Sweden"): (3, 4),
+    # CIV 1–2 NOR · 1ºT +4 (3:57 +4) · 2ºT +7 (7:42 +7) → 101 min
+    _key("CÔTE D'IVOIRE", "Norway"): (4, 7),
 }
 
 
