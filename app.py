@@ -1972,19 +1972,23 @@ with tab_dest:
         with dsub[4]:
             st.subheader("📈 Evolução do ranking ao longo da Copa")
             st.caption("Fica mais rico a cada rodada que você carregar. Ranking por jogo "
-                       "acumulado de cada seleção.")
-            tt = team_match_totals(d, ["Total Distance (m)", "Z4+Z5 (m)", "25+ km/h (m)"])
+                       "acumulado de cada seleção — físico E técnico-tático.")
+            tt, _, _ = build_context_table(df0)
             if tt.empty:
-                st.info("Dados insuficientes.")
+                st.info("Dados insuficientes (precisa das zonas de velocidade).")
             else:
-                bm_lbl = {"Distância total": "Total Distance (m)"}
-                if "Z4+Z5 (m)" in tt.columns:
-                    bm_lbl["Alta intensidade Z4+Z5"] = "Z4+Z5 (m)"
-                if "25+ km/h (m)" in tt.columns:
-                    bm_lbl["Sprint Z5"] = "25+ km/h (m)"
+                phys_map = {"Distância total": "Dist. total (km)",
+                            "Alta intensidade Z4+Z5": "Z4+Z5 (km)",
+                            "Sprint Z5": "Sprint Z5 (km)"}
+                bm_lbl = {k: v for k, v in phys_map.items() if v in tt.columns}
+                for m in ["xG", "Posse (%)", "Finalizações", "Passes", "Line breaks",
+                          "Progressões", "Recep. terço final", "Pressões def.",
+                          "Turnovers forçados"]:
+                    if m in tt.columns and tt[m].notna().any():
+                        bm_lbl["⚽ " + m] = m
                 pick = st.selectbox("Métrica", list(bm_lbl), key="bump_metric")
                 col = bm_lbl[pick]
-                tt = tt.copy()
+                tt = tt.dropna(subset=[col]).copy()
                 date_map = {mid: (match_entry(d, mid)[0] or {}).get("date")
                             for mid in tt["Match ID"].unique()}
                 tt["data"] = tt["Match ID"].map(date_map)
