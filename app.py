@@ -1726,8 +1726,7 @@ with tab_dest:
                     if int_m else pd.DataFrame())               # percentil físico por seleção
 
         dsub = st.tabs([
-            "📝 Scout Report", "🧬 DNA & Confronto", "🆚 Comparador",
-            "🐝 Distribuição", "📈 Evolução",
+            "📝 Scout Report", "🧬 DNA & Confronto", "🆚 Comparador", "📈 Evolução",
         ])
 
         # ---- #1 SCOUT REPORT (aprofundado) ---------------------------------
@@ -2019,30 +2018,8 @@ with tab_dest:
                     st.success(f"**Mais completo fisicamente: {champ}** "
                                f"({max(wa_n, wb_n)} de {len(sdf)} variáveis)")
 
-        # ---- BEESWARM / DISTRIBUIÇÃO ---------------------------------------
-        with dsub[3]:
-            st.subheader("🐝 Distribuição (beeswarm)")
-            st.caption("Cada ponto é um jogador — revela a dispersão real, não só a média.")
-            groups = ([("Resultado", "Resultado")] if has_res else []) + \
-                     ([("Posição (nome)", "Posição")] if has_pos else [])
-            if not groups or not int_m:
-                st.info("Carregue dados com resultado/posição.")
-            else:
-                gcol = st.radio("Agrupar por", [g[1] for g in groups], horizontal=True,
-                                key="bee_group")
-                gfield = dict((g[1], g[0]) for g in groups)[gcol]
-                bmetric = st.selectbox("Métrica", int_m, key="bee_metric")
-                dd = d.dropna(subset=[gfield, bmetric])
-                figb = px.strip(dd, x=gfield, y=bmetric, color=gfield,
-                                stripmode="overlay", hover_name="Player Name",
-                                color_discrete_map=RESULT_COLORS if gfield == "Resultado" else None,
-                                title=f"Distribuição de {bmetric} por {gcol}")
-                figb.update_traces(jitter=0.35, marker=dict(size=6, opacity=0.7))
-                figb.update_layout(height=460, showlegend=False)
-                st.plotly_chart(figb, use_container_width=True)
-
         # ---- EVOLUÇÃO / BUMP CHART -----------------------------------------
-        with dsub[4]:
+        with dsub[3]:
             st.subheader("📈 Evolução do ranking ao longo da Copa")
             st.caption("Fica mais rico a cada rodada que você carregar. Ranking por jogo "
                        "acumulado de cada seleção — físico E técnico-tático.")
