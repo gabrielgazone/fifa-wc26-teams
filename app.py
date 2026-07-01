@@ -1778,19 +1778,26 @@ with tab_dest:
                 tpct = techprof[tr].rank(pct=True) * 100
                 for m in tr:
                     prof["⚽ " + m] = tpct.loc[t, m]
-            pf = pd.DataFrame({"Métrica": list(prof), "Percentil": list(prof.values())}).dropna()
-            if not pf.empty:
-                pf = pf.sort_values("Percentil")
-                figpr = px.bar(pf, x="Percentil", y="Métrica", orientation="h",
-                               color="Percentil", color_continuous_scale="RdYlGn",
-                               range_color=[0, 100], text_auto=".0f",
-                               title=f"Onde {team_code(t)} se destaca — e onde fica devendo")
-                figpr.add_vline(x=50, line_dash="dash", line_color="gray")
-                figpr.update_layout(height=max(400, 24 * len(pf)), coloraxis_showscale=False)
-                st.plotly_chart(figpr, use_container_width=True)
-                st.caption("Percentil vs todas as seleções carregadas (físico + ⚽ técnico-tático). "
-                           "Linha tracejada = mediana. Verde/direita = ponto forte; "
-                           "vermelho/esquerda = ponto a melhorar.")
+            prof = {k: v for k, v in prof.items() if pd.notna(v)}
+            if prof:
+                chosen = st.multiselect(
+                    "Variáveis no gráfico (físico + ⚽ técnico-tático)", list(prof),
+                    default=list(prof), key="scout_vars")
+                pf = pd.DataFrame({"Métrica": chosen,
+                                   "Percentil": [prof[m] for m in chosen]})
+                if pf.empty:
+                    st.info("Selecione ao menos uma variável.")
+                else:
+                    pf = pf.sort_values("Percentil")
+                    figpr = px.bar(pf, x="Percentil", y="Métrica", orientation="h",
+                                   color="Percentil", color_continuous_scale="RdYlGn",
+                                   range_color=[0, 100], text_auto=".0f",
+                                   title=f"Onde {team_code(t)} se destaca — e onde fica devendo")
+                    figpr.add_vline(x=50, line_dash="dash", line_color="gray")
+                    figpr.update_layout(height=max(360, 24 * len(pf)), coloraxis_showscale=False)
+                    st.plotly_chart(figpr, use_container_width=True)
+                    st.caption("Percentil vs todas as seleções carregadas. Linha tracejada = "
+                               "mediana. Verde/direita = ponto forte; vermelho/esquerda = a melhorar.")
 
             # campanha (resultados jogo a jogo)
             if has_res and "Resultado" in recs.columns:
