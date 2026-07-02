@@ -200,6 +200,10 @@ MATCHES = [
     _M("FRANCE", 3, "SWEDEN", 0, "30/06/2026", round="Round of 32"),
     _M("CÔTE D'IVOIRE", 1, "NORWAY", 2, "30/06/2026", round="Round of 32"),
     _M("MEXICO", 2, "ECUADOR", 0, "30/06/2026", round="Round of 32"),
+    _M("ENGLAND", 2, "CONGO DR", 1, "01/07/2026", round="Round of 32"),
+    _M("USA", 2, "BOSNIA AND HERZEGOVINA", 0, "01/07/2026", round="Round of 32"),
+    _M("BELGIUM", 3, "SENEGAL", 2, "01/07/2026", round="Round of 32",
+       scorers="3–2 após prorrogação"),
 ]
 
 # índice por par de seleções (canônico)

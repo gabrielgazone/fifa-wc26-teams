@@ -59,6 +59,12 @@ ADDED_TIME = {
     _key("CÔTE D'IVOIRE", "Norway"): (4, 7),
     # MEX 2–0 ECU · 1ºT +5 (5:03 +5) · 2ºT +7 (8:57 +7) → 102 min
     _key("Mexico", "Ecuador"): (5, 7),
+    # ENG 2–1 COD · 1ºT +6 (6:13 +6) · 2ºT +6 (6:31 +6) → 102 min
+    _key("England", "Congo DR"): (6, 6),
+    # USA 2–0 BIH · 1ºT +5 (9:58 +5) · 2ºT +10 (10:02 +10) → 105 min
+    _key("USA", "Bosnia and Herzegovina"): (5, 10),
+    # BEL 3–2 SEN (prorrogação) · 5/7/ET1 +0 (105:00 sem acréscimo)/+4 (120:00) → 136 min
+    _key("Belgium", "Senegal"): (5, 7, 0, 4),
 }
 
 
