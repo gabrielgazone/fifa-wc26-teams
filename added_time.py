@@ -65,6 +65,11 @@ ADDED_TIME = {
     _key("USA", "Bosnia and Herzegovina"): (5, 10),
     # BEL 3–2 SEN (prorrogação) · 5/7/ET1 +0 (105:00 sem acréscimo)/+4 (120:00) → 136 min
     _key("Belgium", "Senegal"): (5, 7, 0, 4),
+    # POR 2–1 CRO · 1ºT +4 (4:02 +4) · 2ºT +10 (18:39 +10) → 104 min
+    _key("Portugal", "Croatia"): (4, 10),
+    # ESP 3–0 AUT · 1ºT +4 (4:13 +4) · 2ºT +6 (5:52 +6) → 100 min
+    _key("Spain", "Austria"): (4, 6),
+    # SUI-ALG, ARG-CPV, COL-GHA, AUS-EGY: aguardando relógios completos.
 }
 
 
