@@ -69,7 +69,14 @@ ADDED_TIME = {
     _key("Portugal", "Croatia"): (4, 10),
     # ESP 3–0 AUT · 1ºT +4 (4:13 +4) · 2ºT +6 (5:52 +6) → 100 min
     _key("Spain", "Austria"): (4, 6),
-    # SUI-ALG, ARG-CPV, COL-GHA, AUS-EGY: aguardando relógios completos.
+    # SUI 2–0 ALG · 1ºT +4 (3:58 +4) · 2ºT +6 (4:54 +6) → 100 min
+    _key("Switzerland", "Algeria"): (4, 6),
+    # COL 1–0 GHA · 1ºT +6 (7:02 +6) · 2ºT +6 (7:21 +6) → 102 min
+    _key("Colombia", "Ghana"): (6, 6),
+    # ARG 3–2 CPV (prorrogação) · 4/8/+3(105:00)/+3(120:00) → 138 min
+    _key("Argentina", "Cabo Verde"): (4, 8, 3, 3),
+    # AUS 1–1 EGY (prorrogação, pênaltis) · 5/5/ET1 +0(105:00)/+1(120:00) → 131 min
+    _key("Australia", "Egypt"): (5, 5, 0, 1),
 }
 
 
