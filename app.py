@@ -958,6 +958,24 @@ def build_phase_table(df):
     return tab, variaveis
 
 
+def phase_delta(frame, pvars, minn=1, sig=False):
+    """Δ% (mata-mata vs grupos) por variável, de uma tabela de fase filtrada."""
+    rows = []
+    for v in pvars:
+        grp = pd.to_numeric(frame[frame.Fase == "Fase de Grupos"][v], errors="coerce").dropna()
+        kno = pd.to_numeric(frame[frame.Fase == "Mata-mata"][v], errors="coerce").dropna()
+        if len(grp) < minn or len(kno) < minn or grp.mean() == 0:
+            continue
+        gm, km = grp.mean(), kno.mean()
+        rec = {"Variável": v, "Grupos": round(gm, 2), "Mata-mata": round(km, 2),
+               "Δ%": round((km - gm) / abs(gm) * 100, 1)}
+        if sig:
+            p, _ = mann_whitney(kno.values, grp.values)
+            rec["sig"] = bool(pd.notna(p) and p < 0.05)
+        rows.append(rec)
+    return pd.DataFrame(rows)
+
+
 def render_kpis(df):
     """4 cartões-resumo (Partidas/Seleções/Jogadores/Linhas) — topo de cada aba."""
     ok = isinstance(df, pd.DataFrame) and not df.empty
@@ -1871,6 +1889,23 @@ with tab_dest:
                          for _, r in recs.sort_values("Match ID").iterrows()]
                 st.dataframe(pd.DataFrame(rrows), hide_index=True, use_container_width=True)
 
+            # como a seleção muda no mata-mata (se tiver jogos nas duas fases)
+            ptS, pvarsS = build_phase_table(df0)
+            subS = ptS[ptS["Team Name"] == t] if not ptS.empty else pd.DataFrame()
+            if not subS.empty and {"Fase de Grupos", "Mata-mata"}.issubset(set(subS["Fase"])):
+                dS = phase_delta(subS, pvarsS).sort_values("Δ%")
+                if not dS.empty:
+                    st.markdown("**🆚 Como muda no mata-mata** (vs fase de grupos)")
+                    figS = px.bar(dS, x="Δ%", y="Variável", orientation="h", color="Δ%",
+                                  color_continuous_scale="RdBu", range_color=[-40, 40])
+                    figS.add_vline(x=0, line_color="gray")
+                    figS.update_layout(height=max(300, 26 * len(dS)), coloraxis_showscale=False,
+                                       yaxis_title="")
+                    st.plotly_chart(figS, use_container_width=True)
+                    st.caption("Azul = maior no mata-mata; vermelho = menor. Físico em m/min, "
+                               "técnico por 90 min (corrige prorrogação). Poucos jogos — "
+                               "leitura descritiva. Aba **🆚 Grupos × Mata-mata** tem o detalhe.")
+
             # relatório em texto (para a comissão) + download
             md = scout_report(df0, t)
             with st.expander("📄 Relatório em texto (pronto para a comissão técnica)"):
@@ -2508,20 +2543,7 @@ with tab_phase:
                             horizontal=True, key="phase_mode")
 
             def _delta(frame, minn):
-                rows = []
-                for v in pvars:
-                    grp = pd.to_numeric(frame[frame.Fase == "Fase de Grupos"][v], errors="coerce").dropna()
-                    kno = pd.to_numeric(frame[frame.Fase == "Mata-mata"][v], errors="coerce").dropna()
-                    if len(grp) < minn or len(kno) < minn or grp.mean() == 0:
-                        continue
-                    gm, km = grp.mean(), kno.mean()
-                    rec = {"Variável": v, "Grupos": round(gm, 2), "Mata-mata": round(km, 2),
-                           "Δ%": round((km - gm) / abs(gm) * 100, 1)}
-                    if minn >= 3:
-                        p, _ = mann_whitney(kno.values, grp.values)
-                        rec["sig"] = bool(pd.notna(p) and p < 0.05)
-                    rows.append(rec)
-                return pd.DataFrame(rows)
+                return phase_delta(frame, pvars, minn, sig=(minn >= 3))
 
             def _bar(cd, title):
                 lbl = "rótulo" if "rótulo" in cd.columns else "Variável"
