@@ -98,7 +98,9 @@ def _team_minutes(starters, reserves, added):
     breaks = bounds[:-1]
 
     def off_played(m):                                # minutos de quem saiu no minuto m
-        return m + sum(a for a, bnd in zip(added, breaks) if m >= bnd)
+        # limitado a T: um sub no fim (ex.: "90+7" com acréscimo só de +6) não
+        # pode exceder a duração — o que entra joga ~0, quem sai jogou ~tudo.
+        return min(m + sum(a for a, bnd in zip(added, breaks) if m >= bnd), T)
 
     on = [(j, min(ms)) for j, ms in reserves if ms]   # reserva entrou no MENOR minuto
     pool = {j: list(ms) for j, ms in starters}
@@ -112,7 +114,7 @@ def _team_minutes(starters, reserves, added):
             unmatched.append(m)
     mins = {j: round(off_played(off[j]) if j in off else T, 1) for j, _ in starters}
     for j, m in on:
-        mins[j] = round(T - off_played(m), 1)
+        mins[j] = round(max(0.0, T - off_played(m)), 1)
     total = round(sum(mins.values()), 1)
     info = dict(on=on, off=off, unmatched=unmatched, nstart=len(starters),
                 total=total, expected=round(11 * T, 1))

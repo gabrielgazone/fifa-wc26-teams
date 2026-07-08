@@ -568,7 +568,8 @@ def add_derived(frame):
     f = frame.copy()
     if "Total Duration (min)" not in f.columns:
         return f
-    dur = f["Total Duration (min)"].replace(0, np.nan)
+    _d = pd.to_numeric(f["Total Duration (min)"], errors="coerce")
+    dur = _d.where(_d > 0)                       # duração <= 0 -> NaN (evita inf/negativo)
     full = all(c in f.columns for c in SPEED_ZONES.values())
     if "Total Distance (m)" in f.columns:
         f["Distância/min"] = f["Total Distance (m)"] / dur
@@ -1344,7 +1345,9 @@ with tab3:
                        if c in df_a.columns]
                 size_col = "Sprint/min" if "Sprint/min" in df_a.columns else None
                 need = ["Distância/min", "Max Speed (km/h)"] + ([size_col] if size_col else [])
-                ds = df_a.dropna(subset=need)
+                ds = df_a.replace([np.inf, -np.inf], np.nan).dropna(subset=need)
+                if size_col:
+                    ds = ds[ds[size_col] >= 0]            # size do Plotly exige >= 0
                 if ds.empty:
                     st.info("Sem jogadores com dados suficientes para o gráfico.")
                 else:
