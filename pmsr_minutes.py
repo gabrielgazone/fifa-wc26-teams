@@ -121,8 +121,10 @@ def _team_minutes(starters, reserves, added):
     return mins, info
 
 
-def compute(pdf_path):
-    """-> ({canon(time): {jersey: minutos}}, {canon(time): info}) ou (None, None)."""
+def compute(pdf_path, dnp=None):
+    """-> ({canon(time): {jersey: minutos}}, {canon(time): info}) ou (None, None).
+    dnp = {canon(time): {camisas}} — reservas com minuto FANTASMA que não jogaram
+    (identificados por distância 0 no CSV); são removidos das substituições."""
     from pdf_to_csv import parse_pmsr
     doc = fitz.open(pdf_path)
     R = _rows(doc[1])
@@ -132,10 +134,13 @@ def compute(pdf_path):
     at = added_time_for(tA, tB)
     if not at:
         return None, None
+    dnp = dnp or {}
     out, status = {}, {}
     for nm, side in [(tA, "A"), (tB, "B")]:
         st = _players(R, side, h[side + "_start"], h[side + "_sub"])
         rv = _players(R, side, h[side + "_sub"], 99999)
+        skip = dnp.get(canon(nm), set())
+        rv = [(j, ms) for j, ms in rv if j not in skip]
         mins, info = _team_minutes(st, rv, tuple(at))
         out[canon(nm)], status[canon(nm)] = mins, info
     return out, status
@@ -143,7 +148,24 @@ def compute(pdf_path):
 
 def fill_csv(pdf_path, csv_path):
     """Valida e grava Total Duration no CSV. Levanta erro se não validar."""
-    mins, status = compute(pdf_path)
+    lines = open(csv_path, encoding="utf-8").read().splitlines()
+    H = lines[0].split(";")
+    ti, ji, di = H.index("Team Name"), H.index("Jersey #"), H.index("Total Duration (min)")
+    disti = H.index("Total Distance (m)")
+    # DNP: jogadores com distância 0 no CSV (não entraram) -> ignora subs fantasma
+    dnp = {}
+    for ln in lines[1:]:
+        if not ln.strip():
+            continue
+        f = ln.split(";")
+        try:
+            zero = float(f[disti].replace(".", "").replace(",", ".")) == 0
+        except ValueError:
+            zero = False
+        if zero:
+            dnp.setdefault(canon(f[ti]), set()).add(f[ji].strip())
+
+    mins, status = compute(pdf_path, dnp=dnp)
     if not mins:
         raise SystemExit("Sem acréscimo armazenado em added_time.py — abortado.")
     for tm, info in status.items():
@@ -153,15 +175,17 @@ def fill_csv(pdf_path, csv_path):
     if not all(i["ok"] for i in status.values()):
         raise SystemExit("Validação falhou — minutos NÃO gravados.")
 
-    lines = open(csv_path, encoding="utf-8").read().splitlines()
-    H = lines[0].split(";")
-    ti, ji, di = H.index("Team Name"), H.index("Jersey #"), H.index("Total Duration (min)")
     out, missing = [lines[0]], []
     for ln in lines[1:]:
         if not ln.strip():
             continue
         f = ln.split(";")
-        val = mins.get(canon(f[ti]), {}).get(f[ji].strip())
+        tmc, jr = canon(f[ti]), f[ji].strip()
+        if jr in dnp.get(tmc, set()):
+            f[di] = ""                       # DNP: duração em branco (não jogou)
+            out.append(";".join(f))
+            continue
+        val = mins.get(tmc, {}).get(jr)
         if val is None:
             missing.append((f[ti], f[ji]))
         else:

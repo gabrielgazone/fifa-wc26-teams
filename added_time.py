@@ -86,6 +86,14 @@ ADDED_TIME = {
     _key("Brazil", "Norway"): (6, 7),
     # MEX 2–3 ENG · 1ºT +5 (5:05 +5) · 2ºT +11 (12:01 +11) → 106 min
     _key("Mexico", "England"): (5, 11),
+    # POR 0–1 ESP · 1ºT +6 (6:02 +6) · 2ºT +6 (8:42 +6) → 102 min
+    _key("Portugal", "Spain"): (6, 6),
+    # USA 1–4 BEL · 1ºT +6 (6:28 +6) · 2ºT +4 (4:01 +4) → 100 min
+    _key("USA", "Belgium"): (6, 4),
+    # ARG 3–2 EGY · 1ºT +5 (6:06 +5) · 2ºT +7 (10:53 +7) → 102 min
+    _key("Argentina", "Egypt"): (5, 7),
+    # SUI 0–0 COL (prorrogação, pênaltis) · 3/5/+1(105:00)/+1(120:00) → 130 min
+    _key("Switzerland", "Colombia"): (3, 5, 1, 1),
 }
 
 

@@ -216,6 +216,11 @@ MATCHES = [
     _M("CANADA", 0, "MOROCCO", 3, "04/07/2026", round="Round of 16"),
     _M("BRAZIL", 1, "NORWAY", 2, "05/07/2026", round="Round of 16"),
     _M("MEXICO", 2, "ENGLAND", 3, "05/07/2026", round="Round of 16"),
+    _M("PORTUGAL", 0, "SPAIN", 1, "06/07/2026", round="Round of 16"),
+    _M("USA", 1, "BELGIUM", 4, "06/07/2026", round="Round of 16"),
+    _M("ARGENTINA", 3, "EGYPT", 2, "07/07/2026", round="Round of 16"),
+    _M("SWITZERLAND", 0, "COLOMBIA", 0, "07/07/2026", round="Round of 16",
+       scorers="0–0; decidido nos pênaltis (prorrogação)"),
 ]
 
 # índice por par de seleções (canônico)
