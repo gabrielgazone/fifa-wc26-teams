@@ -900,6 +900,64 @@ def team_technical_profiles(team_names):
     return pd.DataFrame(rows).T
 
 
+# comparação Fase de Grupos × Mata-mata (tudo RELATIVO: físico m/min, técnico /90)
+PHASE_PHYS = ["Distância/min", "HID/min", "Sprint/min", "Sprints/min", "% Sprint"]
+PHASE_TECH_CNT = ["xG", "Finalizações", "Line breaks", "Progressões", "Pressões def.",
+                  "Passes", "Recep. terço final", "Turnovers forçados"]
+PHASE_TECH_RATIO = ["Posse (%)", "Acerto passe (%)"]
+
+
+def build_phase_table(df):
+    """1 linha por equipe-jogo com a Fase (Fase de Grupos / Mata-mata) e as
+    variáveis RELATIVAS: físico em m/min (média dos jogadores) e técnico por
+    90 min (corrige acréscimo e prorrogação). -> (tabela, lista_de_variáveis)."""
+    d = add_derived(df)
+    if "Match ID" not in d.columns or "Team Name" not in d.columns:
+        return pd.DataFrame(), []
+    phys = [m for m in PHASE_PHYS if m in d.columns]
+    g = d.groupby(["Team Name", "Match ID"])
+    tab = g[phys].mean().reset_index()
+    if "Total Duration (min)" in d.columns:
+        tab = tab.merge(g["Total Duration (min)"].max().reset_index(name="_dur"),
+                        on=["Team Name", "Match ID"])
+    else:
+        tab["_dur"] = 90.0
+    mt = {mid: teams_of_match(d, mid) for mid in tab["Match ID"].dropna().unique()}
+
+    def fase(mid):
+        ts = mt.get(mid, [])
+        e = result_for(*ts) if len(ts) == 2 else None
+        r = str((e or {}).get("round", ""))
+        if not r:
+            return "?"
+        return "Fase de Grupos" if "Grupo" in r else "Mata-mata"
+    tab["Fase"] = tab["Match ID"].map(fase)
+
+    cnt = [c for c in PHASE_TECH_CNT if c in (TECH_COLS or [])]
+    rat = [c for c in PHASE_TECH_RATIO if c in (TECH_COLS or [])]
+
+    def tech(row):
+        ts = mt.get(row["Match ID"], [])
+        opp = next((t for t in ts if canon(t) != canon(row["Team Name"])), None)
+        e = tech_for(row["Team Name"], opp) if opp else None
+        stt = (e or {}).get(canon(row["Team Name"]), {}) if e else {}
+        f90 = (row["_dur"] / 90) if row.get("_dur") else 1
+        out = {}
+        for c in cnt:
+            v = stt.get(c)
+            out[c + " /90"] = (v / f90) if (v is not None and f90) else np.nan
+        for c in rat:
+            out[c] = stt.get(c, np.nan)
+        return pd.Series(out)
+
+    if cnt or rat:
+        tab = pd.concat([tab, tab.apply(tech, axis=1)], axis=1)
+    tab["Sigla"] = tab["Team Name"].map(team_code)
+    variaveis = [v for v in phys + [c + " /90" for c in cnt] + rat
+                 if v in tab.columns and tab[v].notna().any()]
+    return tab, variaveis
+
+
 def render_kpis(df):
     """4 cartões-resumo (Partidas/Seleções/Jogadores/Linhas) — topo de cada aba."""
     ok = isinstance(df, pd.DataFrame) and not df.empty
@@ -967,12 +1025,13 @@ st.markdown(
 )
 
 # ── abas ──────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab_dest, tab_ctx, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab_dest, tab_ctx, tab_phase, tab4, tab5 = st.tabs([
     "📂 Upload",
     "📋 Tabela & Filtros",
     "📊 Análise Física",
     "✨ Destaques",
     "🧩 Contextual",
+    "🆚 Grupos × Mata-mata",
     "⚙️ Transformar",
     "📄 Relatório PDF",
 ])
@@ -2421,6 +2480,95 @@ with tab_ctx:
                                                       "Resultado": ["Vitória", "Empate", "Derrota"]})
                         fig.update_layout(height=430, xaxis_tickangle=-30, xaxis_title="")
                         st.plotly_chart(fig, use_container_width=True)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# ABA 🆚 — Fase de Grupos × Mata-mata (perfil relativo por minuto)
+# ════════════════════════════════════════════════════════════════════════════
+with tab_phase:
+    render_kpis(st.session_state.df)
+    dfp = st.session_state.df
+    if dfp.empty:
+        st.info("Carregue arquivos na aba **Upload** primeiro.")
+    else:
+        pt, pvars = build_phase_table(dfp)
+        fases = set(pt["Fase"].unique()) if not pt.empty else set()
+        if pt.empty or not {"Fase de Grupos", "Mata-mata"}.issubset(fases):
+            st.info("Carregue jogos das **duas fases** (grupos e mata-mata) para comparar. "
+                    "Fases presentes agora: "
+                    + (", ".join(sorted(f for f in fases if f != "?")) or "nenhuma reconhecida"))
+        else:
+            st.header("🆚 Fase de Grupos × Mata-mata")
+            st.caption("Perfil físico e técnico-tático na fase de grupos vs eliminatórias, "
+                       "tudo **relativo**: físico em **m/min** e técnico por **90 min** — assim a "
+                       "prorrogação e os acréscimos não distorcem. Lê: *o jogo (ou a seleção) "
+                       "muda sob pressão de eliminação?*")
+            pt = pt[pt["Fase"].isin(["Fase de Grupos", "Mata-mata"])].copy()
+            modo = st.radio("Ver", ["🌍 Torneio (todas as seleções)", "🏳️ Por seleção"],
+                            horizontal=True, key="phase_mode")
+
+            def _delta(frame, minn):
+                rows = []
+                for v in pvars:
+                    grp = pd.to_numeric(frame[frame.Fase == "Fase de Grupos"][v], errors="coerce").dropna()
+                    kno = pd.to_numeric(frame[frame.Fase == "Mata-mata"][v], errors="coerce").dropna()
+                    if len(grp) < minn or len(kno) < minn or grp.mean() == 0:
+                        continue
+                    gm, km = grp.mean(), kno.mean()
+                    rec = {"Variável": v, "Grupos": round(gm, 2), "Mata-mata": round(km, 2),
+                           "Δ%": round((km - gm) / abs(gm) * 100, 1)}
+                    if minn >= 3:
+                        p, _ = mann_whitney(kno.values, grp.values)
+                        rec["sig"] = bool(pd.notna(p) and p < 0.05)
+                    rows.append(rec)
+                return pd.DataFrame(rows)
+
+            def _bar(cd, title):
+                lbl = "rótulo" if "rótulo" in cd.columns else "Variável"
+                fig = px.bar(cd, x="Δ%", y=lbl, orientation="h", color="Δ%",
+                             color_continuous_scale="RdBu", range_color=[-40, 40], title=title)
+                fig.add_vline(x=0, line_color="gray")
+                fig.update_layout(height=max(380, 28 * len(cd)), coloraxis_showscale=False,
+                                  yaxis_title="")
+                st.plotly_chart(fig, use_container_width=True)
+
+            if modo.startswith("🌍"):
+                cd = _delta(pt, 3).dropna(subset=["Δ%"]).sort_values("Δ%")
+                if cd.empty:
+                    st.info("Amostra insuficiente para a comparação.")
+                else:
+                    cd["rótulo"] = np.where(cd["sig"], "★ " + cd["Variável"], cd["Variável"])
+                    _bar(cd, "Mudança no mata-mata vs fase de grupos (Δ%)")
+                    st.caption("Δ% > 0 (azul) = **maior no mata-mata**; < 0 (vermelho) = menor. "
+                               "★ = diferença significativa (Mann-Whitney p<0,05). "
+                               "Físico em m/min · técnico por 90 min.")
+                    st.dataframe(cd[["Variável", "Grupos", "Mata-mata", "Δ%"]],
+                                 hide_index=True, use_container_width=True)
+            else:
+                both = [t for t in sorted(pt["Team Name"].unique())
+                        if {"Fase de Grupos", "Mata-mata"}.issubset(
+                            set(pt[pt["Team Name"] == t]["Fase"]))]
+                if not both:
+                    st.info("Nenhuma seleção tem jogos nas **duas** fases ainda "
+                            "(precisa ter avançado ao mata-mata).")
+                else:
+                    tsel = st.selectbox("Seleção", both, key="phase_team")
+                    sub = pt[pt["Team Name"] == tsel]
+                    ng = int((sub.Fase == "Fase de Grupos").sum())
+                    nk = int((sub.Fase == "Mata-mata").sum())
+                    st.caption(f"**{tsel}** — {ng} jogo(s) de grupos × {nk} de mata-mata. "
+                               "Poucos jogos: leitura descritiva (não é teste estatístico).")
+                    cd = _delta(sub, 1).dropna(subset=["Δ%"]).sort_values("Δ%")
+                    if cd.empty:
+                        st.info("Sem dados suficientes para esta seleção.")
+                    else:
+                        _bar(cd, f"{team_code(tsel)} — mata-mata vs fase de grupos (Δ%)")
+                        top = cd.reindex(cd["Δ%"].abs().sort_values(ascending=False).index).head(3)
+                        chg = " · ".join(f"{r['Variável']} {r['Δ%']:+.0f}%"
+                                         for _, r in top.iterrows())
+                        st.info(f"**Onde {team_code(tsel)} mais muda no mata-mata:** {chg}")
+                        st.dataframe(cd[["Variável", "Grupos", "Mata-mata", "Δ%"]],
+                                     hide_index=True, use_container_width=True)
 
 
 # ════════════════════════════════════════════════════════════════════════════
