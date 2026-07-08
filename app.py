@@ -211,6 +211,11 @@ MATCHES = [
     _M("COLOMBIA", 1, "GHANA", 0, "03/07/2026", round="Round of 32"),
     _M("AUSTRALIA", 1, "EGYPT", 1, "03/07/2026", round="Round of 32",
        scorers="1–1; decidido nos pênaltis (prorrogação)"),
+    # ── Oitavas de final · Round of 16 ──
+    _M("PARAGUAY", 0, "FRANCE", 1, "04/07/2026", round="Round of 16"),
+    _M("CANADA", 0, "MOROCCO", 3, "04/07/2026", round="Round of 16"),
+    _M("BRAZIL", 1, "NORWAY", 2, "05/07/2026", round="Round of 16"),
+    _M("MEXICO", 2, "ENGLAND", 3, "05/07/2026", round="Round of 16"),
 ]
 
 # índice por par de seleções (canônico)

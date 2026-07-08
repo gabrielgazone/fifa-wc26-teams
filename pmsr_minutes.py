@@ -28,9 +28,15 @@ POSRE = re.compile(r"^(GK|DF|MF|FW)(\d*)$")
 
 
 def _reg(mtok):
-    """'83'' -> 83 ; '90+4'' -> 90 ; '120+2'' -> 120 (minuto de regulamento)."""
+    """Minuto para pareamento entrada/saída e duração.
+    O acréscimo do 2º tempo é convertido para minuto CONTÍNUO (90+8 -> 98) — o
+    PMSR mistura os dois formatos para o mesmo lance, e o contínuo casa e conta
+    a parada. Acréscimos de 1ºT/ET (45+x, 105+x, 120+x) ficam na fronteira."""
     s = mtok.rstrip("'")
-    return int(s.split("+")[0]) if "+" in s else int(s)
+    if "+" in s:
+        base, plus = s.split("+")
+        return 90 + int(plus) if base == "90" else int(base)
+    return int(s)
 
 
 def _rows(pg):

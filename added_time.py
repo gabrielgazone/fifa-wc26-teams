@@ -77,6 +77,15 @@ ADDED_TIME = {
     _key("Argentina", "Cabo Verde"): (4, 8, 3, 3),
     # AUS 1–1 EGY (prorrogação, pênaltis) · 5/5/ET1 +0(105:00)/+1(120:00) → 131 min
     _key("Australia", "Egypt"): (5, 5, 0, 1),
+    # --- Oitavas de final (Round of 16) ---
+    # PAR 0–1 FRA · 1ºT +3 (3:06 +3) · 2ºT +10 (10:02 +10) → 103 min
+    _key("Paraguay", "France"): (3, 10),
+    # CAN 0–3 MAR · 1ºT +6 (6:01 +6) · 2ºT +8 (8:36 +8) → 104 min
+    _key("Canada", "Morocco"): (6, 8),
+    # BRA 1–2 NOR · 1ºT +6 (6:06 +6) · 2ºT +7 (11:40 +7) → 103 min
+    _key("Brazil", "Norway"): (6, 7),
+    # MEX 2–3 ENG · 1ºT +5 (5:05 +5) · 2ºT +11 (12:01 +11) → 106 min
+    _key("Mexico", "England"): (5, 11),
 }
 
 
