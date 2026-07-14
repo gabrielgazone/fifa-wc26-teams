@@ -105,7 +105,15 @@ def _team_minutes(starters, reserves, added):
     on = [(j, min(ms)) for j, ms in reserves if ms]   # reserva entrou no MENOR minuto
     pool = {j: list(ms) for j, ms in starters}
     off, unmatched = {}, []
-    for _, m in sorted(on, key=lambda e: e[1]):
+    # pareamento "mais restrito primeiro": casa o minuto com MENOS titulares
+    # candidatos antes (ex.: 111' só do Bellingham), evitando que um cartão
+    # coincidente (Bellingham "45+2'") roube a vaga de uma troca real do 45'.
+    remaining = list(on)
+    while remaining:
+        opts = [(len([j for j, ms in pool.items() if m in ms and j not in off]), i, m)
+                for i, (_, m) in enumerate(remaining)]
+        _, idx, m = min(opts)
+        remaining.pop(idx)
         cand = [j for j, ms in pool.items() if m in ms and j not in off]
         if cand:
             off[cand[0]] = m

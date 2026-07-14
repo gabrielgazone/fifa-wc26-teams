@@ -94,6 +94,15 @@ ADDED_TIME = {
     _key("Argentina", "Egypt"): (5, 7),
     # SUI 0–0 COL (prorrogação, pênaltis) · 3/5/+1(105:00)/+1(120:00) → 130 min
     _key("Switzerland", "Colombia"): (3, 5, 1, 1),
+    # --- Quartas de final ---
+    # FRA 2–0 MAR · 1ºT +5 (5:00 +5) · 2ºT +6 (6:06 +6) → 101 min
+    _key("France", "Morocco"): (5, 6),
+    # ESP 2–1 BEL · 1ºT +5 (5:00 +5) · 2ºT +7 (7:00 +7) → 102 min
+    _key("Spain", "Belgium"): (5, 7),
+    # NOR 1–2 ENG (prorrogação) · 4/7/+3(105:00)/+2(120:00) → 136 min
+    _key("Norway", "England"): (4, 7, 3, 2),
+    # ARG 3–1 SUI (prorrogação) · 4/9/+1(105:00)/+4(120:00) → 138 min
+    _key("Argentina", "Switzerland"): (4, 9, 1, 4),
 }
 
 

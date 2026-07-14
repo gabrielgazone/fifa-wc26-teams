@@ -221,6 +221,13 @@ MATCHES = [
     _M("ARGENTINA", 3, "EGYPT", 2, "07/07/2026", round="Round of 16"),
     _M("SWITZERLAND", 0, "COLOMBIA", 0, "07/07/2026", round="Round of 16",
        scorers="0–0; decidido nos pênaltis (prorrogação)"),
+    # ── Quartas de final ──
+    _M("FRANCE", 2, "MOROCCO", 0, "09/07/2026", round="Quarter-finals"),
+    _M("SPAIN", 2, "BELGIUM", 1, "10/07/2026", round="Quarter-finals"),
+    _M("NORWAY", 1, "ENGLAND", 2, "11/07/2026", round="Quarter-finals",
+       scorers="1–2 após prorrogação"),
+    _M("ARGENTINA", 3, "SWITZERLAND", 1, "11/07/2026", round="Quarter-finals",
+       scorers="3–1 após prorrogação"),
 ]
 
 # índice por par de seleções (canônico)
