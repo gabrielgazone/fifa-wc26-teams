@@ -557,6 +557,39 @@ def interpret_effect(d):
     return "grande"
 
 
+def interpret_cliffs(d):
+    """Magnitude do Cliff's delta pelos limiares de Romano et al. (2006)."""
+    if pd.isna(d):
+        return "—"
+    ad = abs(d)
+    if ad < 0.147:
+        return "desprezível"
+    if ad < 0.33:
+        return "pequeno"
+    if ad < 0.474:
+        return "médio"
+    return "grande"
+
+
+def fdr_bh(pvals):
+    """p-valores corrigidos (q) por Benjamini-Hochberg — controla o FDR quando
+    se testa muitas variáveis de uma vez."""
+    p = np.asarray(pvals, float)
+    ok = ~np.isnan(p)
+    q = np.full(p.shape, np.nan)
+    if ok.sum() == 0:
+        return q
+    pv = p[ok]
+    n = len(pv)
+    order = np.argsort(pv)
+    ranked = pv[order] * n / (np.arange(n) + 1)
+    ranked = np.minimum.accumulate(ranked[::-1])[::-1]   # monotonicidade
+    out = np.empty(n)
+    out[order] = np.clip(ranked, 0, 1)
+    q[ok] = out
+    return q
+
+
 def mann_whitney(a, b):
     """Retorna (p-valor, Cliff's delta). p via scipy (import tardio)."""
     a, b = np.asarray(a, float), np.asarray(b, float)
@@ -933,6 +966,9 @@ def build_phase_table(df):
                         on=["Team Name", "Match ID"])
     else:
         tab["_dur"] = 90.0
+    if "Resultado" in d.columns:                       # resultado da equipe na partida
+        tab = tab.merge(g["Resultado"].first().reset_index(),
+                        on=["Team Name", "Match ID"], how="left")
     mt = {mid: teams_of_match(d, mid) for mid in tab["Match ID"].dropna().unique()}
 
     def fase(mid):
@@ -1500,98 +1536,97 @@ with tab3:
         # POR RESULTADO  (#1 intensidade · #2 alta intensidade · #3 teste · #10 distribuição)
         # ===================================================================
         with sub_tabs[2]:
-            df_r = df_a[df_a["Resultado"].notna()].copy() if has_result else pd.DataFrame()
-            present = ([r for r in RESULT_ORDER if r in df_r["Resultado"].unique()]
-                       if not df_r.empty else [])
-            if not present:
-                st.info("Nenhum jogador com resultado nos filtros atuais. "
-                        "Ajuste os filtros ou informe o placar na aba **Upload**.")
+            st.subheader("🏆 Perfil por resultado — físico e técnico-tático")
+            prt, prvars = build_phase_table(df)      # equipe-jogo: físico m/min + técnico /90
+            prt = (prt[prt["Resultado"].isin(RESULT_ORDER)].copy()
+                   if "Resultado" in prt.columns else pd.DataFrame())
+            groups = [g for g in RESULT_ORDER
+                      if not prt.empty and int((prt["Resultado"] == g).sum()) >= 5]
+            if prt.empty or len(groups) < 2 or not prvars:
+                st.info("Precisa de partidas com placar cadastrado (mín. 5 equipes-jogo por "
+                        "grupo). Informe os placares na aba **Upload**.")
             else:
-                st.subheader("🏆 Perfil físico por resultado")
-                st.caption("Cada jogador entra com o resultado da equipe na partida. "
-                           "Métricas em intensidade (por minuto).")
+                st.caption("**Unidade de análise: equipe-jogo** (não jogador). O resultado é da "
+                           "equipe e jogadores da mesma partida não são independentes — usá-los "
+                           "como unidade infla o n e invalida o p (**pseudorreplicação**). "
+                           "Físico = média dos jogadores em **m/min**; técnico por **90 min** "
+                           "(corrige acréscimo e prorrogação). Usa **todas** as partidas "
+                           "carregadas (os filtros de jogador acima não se aplicam aqui).")
+                cols_n = st.columns(len(groups))
+                for box, g in zip(cols_n, groups):
+                    box.metric(g, f"{int((prt['Resultado'] == g).sum())} equipes-jogo")
 
-                kpi = st.columns(len(present))
-                for box, res in zip(kpi, present):
-                    s = df_r[df_r["Resultado"] == res]
-                    with box:
-                        st.markdown(f"#### {res}")
-                        st.caption(f"{s['Player Name'].nunique()} jog. · "
-                                   f"{s['Team Name'].nunique()} eq.")
-                        if "Distância/min" in s:
-                            st.metric("Intensidade", f"{s['Distância/min'].mean():.1f} m/min")
-                        if "Sprint/min" in s:
-                            st.metric("Sprint", f"{s['Sprint/min'].mean():.2f} m/min")
-                        if "Max Speed (km/h)" in s:
-                            st.metric("Vel. máx.", f"{s['Max Speed (km/h)'].mean():.1f} km/h")
-
-                m_res = st.selectbox("Métrica (#1/#2)", intensity_metrics or all_metrics,
-                                     key="res_metric")
-                agg = (df_r.groupby("Resultado")[m_res].mean()
-                       .reindex(present).reset_index())
-                fig_r = px.bar(agg, x="Resultado", y=m_res, color="Resultado",
-                               color_discrete_map=RESULT_COLORS, text_auto=".2f",
-                               title=f"Média de {m_res} por resultado")
-                fig_r.update_layout(showlegend=False, height=360)
-                st.plotly_chart(fig_r, use_container_width=True)
-                charts_pdf.append((f"{m_res} por resultado", None))
-
-                if full_zones:
-                    rows = []
-                    for res in present:
-                        s = df_r[df_r["Resultado"] == res]
-                        dur = s["Total Duration (min)"].replace(0, np.nan)
-                        for label, col in SPEED_ZONES.items():
-                            rows.append({"Resultado": res, "Zona": label,
-                                         "m/min": (s[col] / dur).mean()})
-                    fig_zr = px.bar(pd.DataFrame(rows), x="Zona", y="m/min",
-                                    color="Resultado", color_discrete_map=RESULT_COLORS,
-                                    barmode="group",
-                                    title="Intensidade por zona de velocidade × resultado (#2)")
-                    fig_zr.update_xaxes(tickangle=-20)
-                    fig_zr.update_layout(height=420, legend=dict(orientation="h", y=-0.35))
-                    st.plotly_chart(fig_zr, use_container_width=True)
-                    charts_pdf.append(("Zonas (m/min) por resultado", None))
-
-                st.markdown("##### 📦 #10 Distribuição (não só a média)")
-                m_dist = st.selectbox("Métrica", intensity_metrics or all_metrics, key="res_dist")
-                kind = st.radio("Tipo", ["Boxplot", "Violino"], horizontal=True, key="res_dist_kind")
-                if kind == "Boxplot":
-                    fig_d = px.box(df_r, x="Resultado", y=m_dist, color="Resultado",
-                                   color_discrete_map=RESULT_COLORS,
-                                   category_orders={"Resultado": present}, points="outliers",
-                                   title=f"Distribuição de {m_dist} por resultado")
+                from scipy.stats import kruskal
+                rows = []
+                for v in prvars:
+                    sers = {g: pd.to_numeric(prt[prt["Resultado"] == g][v],
+                                             errors="coerce").dropna() for g in groups}
+                    if any(len(s) < 5 for s in sers.values()):
+                        continue
+                    try:
+                        kwp = kruskal(*[s.values for s in sers.values()]).pvalue
+                    except Exception:
+                        kwp = np.nan
+                    rec = {"Variável": v}
+                    for g in groups:
+                        rec[f"{g} (mediana)"] = round(sers[g].median(), 2)
+                    rec["KW p"] = kwp
+                    if "Vitória" in sers and "Derrota" in sers:
+                        p, dd = mann_whitney(sers["Vitória"].values, sers["Derrota"].values)
+                        rec["δ (V×D)"] = round(dd, 2) if pd.notna(dd) else np.nan
+                        rec["p (V×D)"] = p
+                    rows.append(rec)
+                R = pd.DataFrame(rows)
+                if R.empty:
+                    st.info("Amostra insuficiente para os testes.")
                 else:
-                    fig_d = px.violin(df_r, x="Resultado", y=m_dist, color="Resultado",
-                                      color_discrete_map=RESULT_COLORS,
-                                      category_orders={"Resultado": present}, box=True,
-                                      points=False,
-                                      title=f"Distribuição de {m_dist} por resultado")
-                fig_d.update_layout(showlegend=False, height=420)
-                st.plotly_chart(fig_d, use_container_width=True)
+                    R["KW q"] = np.round(fdr_bh(R["KW p"].values), 4)
+                    if "p (V×D)" in R.columns:
+                        R["q (V×D)"] = np.round(fdr_bh(R["p (V×D)"].values), 4)
+                        R["Efeito"] = R["δ (V×D)"].map(interpret_cliffs)
+                        R["Signif."] = np.where(R["q (V×D)"] < 0.05, "★", "—")
+                        R = R.reindex(R["δ (V×D)"].abs().sort_values(ascending=False).index)
+                    show = [c for c in (["Variável"] + [f"{g} (mediana)" for g in groups]
+                            + ["KW q", "δ (V×D)", "Efeito", "q (V×D)", "Signif."])
+                            if c in R.columns]
+                    st.dataframe(R[show], hide_index=True, use_container_width=True)
+                    st.caption("**Método:** Kruskal-Wallis (omnibus, 3 grupos) por variável; "
+                               "post-hoc **Vitória × Derrota** por Mann-Whitney com **Cliff's δ**. "
+                               "**q** = p corrigido para múltiplas comparações "
+                               "(**Benjamini-Hochberg, FDR**) — leia o q, não o p bruto. "
+                               "★ = q<0,05. Limiares de δ (Romano et al.): 0,147 pequeno · "
+                               "0,33 médio · 0,474 grande. Associação **não** é causalidade — o "
+                               "físico é, em parte, consequência do contexto de jogo.")
 
-                st.markdown("##### 🔬 #3 Vitória × Derrota: diferença real ou acaso?")
-                if "Vitória" in present and "Derrota" in present:
-                    rows = []
-                    for m in (intensity_metrics or all_metrics):
-                        a = df_r[df_r["Resultado"] == "Vitória"][m]
-                        b = df_r[df_r["Resultado"] == "Derrota"][m]
-                        p, delta = mann_whitney(a, b)
-                        rows.append({
-                            "Métrica": m,
-                            "Mediana Vitória": round(a.median(), 2),
-                            "Mediana Derrota": round(b.median(), 2),
-                            "Cliff's δ": round(delta, 2) if not np.isnan(delta) else np.nan,
-                            "Efeito": interpret_effect(delta),
-                            "p-valor": round(p, 4) if not np.isnan(p) else np.nan,
-                            "Signif. (p<0,05)": "✅" if (not np.isnan(p) and p < 0.05) else "—",
-                        })
-                    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
-                    st.caption("Teste de Mann-Whitney (não-paramétrico). Cliff's δ mede o tamanho "
-                               "do efeito (0 = sem diferença; ±1 = separação total). Com poucos "
-                               "jogos, p-valores devem ser lidos com cautela.")
-                else:
-                    st.info("É preciso ter jogadores de **Vitória** e **Derrota** no filtro atual.")
+                    if "δ (V×D)" in R.columns:
+                        RD = R.dropna(subset=["δ (V×D)"]).copy()
+                        RD["rótulo"] = np.where(RD["Signif."] == "★",
+                                                "★ " + RD["Variável"], RD["Variável"])
+                        figd = px.bar(RD.sort_values("δ (V×D)"), x="δ (V×D)", y="rótulo",
+                                      orientation="h", color="δ (V×D)",
+                                      color_continuous_scale="RdBu", range_color=[-0.8, 0.8],
+                                      title="Vitória × Derrota — Cliff's δ · ★ = q<0,05 (FDR)")
+                        figd.add_vline(x=0, line_color="gray")
+                        figd.update_layout(height=max(400, 26 * len(RD)),
+                                           coloraxis_showscale=False, yaxis_title="")
+                        st.plotly_chart(figd, use_container_width=True)
+                        charts_pdf.append(("Efeito por resultado (V×D)", None))
+                        sig = RD[RD["Signif."] == "★"]
+                        if len(sig):
+                            top = " · ".join(f"{r['Variável']} (δ={r['δ (V×D)']:+.2f})"
+                                             for _, r in sig.head(6).iterrows())
+                            st.success(f"**Explicam a diferença (q<0,05):** {top}")
+                        else:
+                            st.info("Nenhuma variável sobrevive à correção FDR — leia os δ "
+                                    "apenas como tendência.")
+
+                    vsel = st.selectbox("Ver distribuição de", prvars, key="res_dist_v")
+                    figb = px.box(prt, x="Resultado", y=vsel, color="Resultado",
+                                  color_discrete_map=RESULT_COLORS,
+                                  category_orders={"Resultado": groups}, points="all",
+                                  title=f"{vsel} por resultado (cada ponto = uma equipe-jogo)")
+                    figb.update_layout(showlegend=False, height=440)
+                    st.plotly_chart(figb, use_container_width=True)
 
         # ===================================================================
         # POR POSIÇÃO  (#2 por posição · #4 z-score · #10 distribuição)
