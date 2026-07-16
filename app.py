@@ -794,25 +794,35 @@ def build_team_infographic(df_all, team):
 
 
 # ── tabela contextual: 1 linha por equipe-jogo (físico + resultado + técnico) ──
-CTX_PHYS = ["Dist. total (km)", "Z4+Z5 (km)", "Sprint Z5 (km)", "# Sprints", "# Speed Runs"]
+CTX_PHYS = ["Dist. total (km/90)", "Z4+Z5 (km/90)", "Sprint Z5 (km/90)",
+            "# Sprints /90", "# Speed Runs /90"]
 
 
 def build_context_table(df):
+    """1 linha por equipe-jogo. TUDO normalizado por 90 min (valor x 90 / duração
+    da partida) para que acréscimos longos e prorrogação (jogos de 120'+) não
+    inflem os totais. Percentuais (posse, acerto de passe, fases) não são
+    normalizados — já são relativos."""
     if "Team Name" not in df.columns or "Match ID" not in df.columns:
         return pd.DataFrame(), [], []
     d = add_derived(df)
     full = all(c in d.columns for c in SPEED_ZONES.values())
     if not full:
         return pd.DataFrame(), [], []
-    # físico somado por equipe-jogo
+    # físico somado por equipe-jogo, depois normalizado por 90 min
     g = d.groupby(["Team Name", "Match ID"])
     tab = pd.DataFrame({
-        "Dist. total (km)": g["Total Distance (m)"].sum() / 1000,
-        "Z4+Z5 (km)": g["Z4+Z5 (m)"].sum() / 1000,
-        "Sprint Z5 (km)": g["25+ km/h (m)"].sum() / 1000,
-        "# Sprints": g["# Sprints"].sum(),
-        "# Speed Runs": g["# Speed Runs"].sum(),
+        "_dur": (g["Total Duration (min)"].max() if "Total Duration (min)" in d.columns
+                 else g["Total Distance (m)"].size * 0 + 90.0),
+        "Dist. total (km/90)": g["Total Distance (m)"].sum() / 1000,
+        "Z4+Z5 (km/90)": g["Z4+Z5 (m)"].sum() / 1000,
+        "Sprint Z5 (km/90)": g["25+ km/h (m)"].sum() / 1000,
+        "# Sprints /90": g["# Sprints"].sum(),
+        "# Speed Runs /90": g["# Speed Runs"].sum(),
     }).reset_index()
+    f90 = (pd.to_numeric(tab["_dur"], errors="coerce") / 90).replace(0, np.nan)
+    for c in CTX_PHYS:
+        tab[c] = tab[c] / f90
     # resultado (constante dentro da equipe-jogo)
     for col, src in [("Gols feitos", "Gols Marcados"), ("Gols sofridos", "Gols Sofridos"),
                      ("Pontos", "Pontos"), ("Resultado", "Resultado")]:
@@ -847,11 +857,41 @@ def build_context_table(df):
     for c in tech_present + ["Gols feitos", "Gols sofridos", "Pontos"]:
         if c in tab.columns:
             tab[c] = pd.to_numeric(tab[c], errors="coerce")
+    # técnico: contagens -> por 90 min; percentuais (posse, passe, fases) ficam
+    for c in tech_present:
+        if c in tab.columns and not c.endswith("(%)"):
+            tab[c] = tab[c] / f90
 
     phys_cols = [c for c in CTX_PHYS if c in tab.columns]
     res_cols = [c for c in ["Gols feitos", "Gols sofridos", "Pontos"] if c in tab.columns]
     tech_cols = [c for c in tech_present if c in tab.columns and tab[c].notna().any()]
     return tab, phys_cols + res_cols, tech_cols
+
+
+def paired_win_loss(ctx, metric_cols):
+    """Desenho PAREADO: em cada jogo DECIDIDO, Δ = vencedor − perdedor.
+    Vencedor e perdedor saem do MESMO jogo (mesmo árbitro, gramado, clima e
+    adversário) — são PARES, não amostras independentes. Empates ficam de fora
+    (não há vencedor). n = jogos decididos."""
+    cols = [c for c in metric_cols if c in ctx.columns]
+    if not {"Gols feitos", "Gols sofridos"}.issubset(ctx.columns) or not cols:
+        return pd.DataFrame()
+    rows = []
+    for mid, g in ctx.groupby("Match ID"):
+        if len(g) != 2:
+            continue
+        a, b = g.iloc[0], g.iloc[1]
+        sa = (pd.to_numeric(a["Gols feitos"], errors="coerce")
+              - pd.to_numeric(a["Gols sofridos"], errors="coerce"))
+        if pd.isna(sa) or sa == 0:
+            continue
+        w, l = (a, b) if sa > 0 else (b, a)
+        rec = {"Match ID": mid}
+        for c in cols:
+            rec["Δ " + c] = (pd.to_numeric(w[c], errors="coerce")
+                             - pd.to_numeric(l[c], errors="coerce"))
+        rows.append(rec)
+    return pd.DataFrame(rows)
 
 
 def context_diff(ctx, metric_cols):
@@ -2226,9 +2266,9 @@ with tab_dest:
             if tt.empty:
                 st.info("Dados insuficientes (precisa das zonas de velocidade).")
             else:
-                phys_map = {"Distância total": "Dist. total (km)",
-                            "Alta intensidade Z4+Z5": "Z4+Z5 (km)",
-                            "Sprint Z5": "Sprint Z5 (km)"}
+                phys_map = {"Distância total": "Dist. total (km/90)",
+                            "Alta intensidade Z4+Z5": "Z4+Z5 (km/90)",
+                            "Sprint Z5": "Sprint Z5 (km/90)"}
                 bm_lbl = {k: v for k, v in phys_map.items() if v in tt.columns}
                 for m in ["xG", "Posse (%)", "Finalizações", "Passes", "Line breaks",
                           "Progressões", "Recep. terço final", "Pressões def.",
@@ -2317,43 +2357,63 @@ with tab_ctx:
                 if not has_res:
                     st.info("Defina os placares (aba Upload) para esta análise por resultado.")
                 else:
-                    st.subheader("🏅 O que separa quem vence de quem perde")
-                    win = cdf[cdf["Resultado"] == "Vitória"]
-                    los = cdf[cdf["Resultado"] == "Derrota"]
-                    rows = []
-                    for c in metric_all:
-                        a = pd.to_numeric(win[c], errors="coerce").dropna().values
-                        b = pd.to_numeric(los[c], errors="coerce").dropna().values
-                        if len(a) < 5 or len(b) < 5:
-                            continue
-                        p, d = mann_whitney(a, b)
-                        rows.append({"Variável": c, "delta": d, "p": p,
-                                     "sig": bool(pd.notna(p) and p < 0.05)})
-                    ef = (pd.DataFrame(rows, columns=["Variável", "delta", "p", "sig"])
-                          .dropna(subset=["delta"]).sort_values("delta"))
-                    if not ef.empty:
-                        ef["rótulo"] = np.where(ef["sig"], "★ " + ef["Variável"], ef["Variável"])
-                        ef["dir"] = np.where(ef["delta"] >= 0, "Mais em vitórias", "Mais em derrotas")
-                        fig = px.bar(ef, x="delta", y="rótulo", orientation="h", color="dir",
-                                     color_discrete_map={"Mais em vitórias": "#f0a500",
-                                                         "Mais em derrotas": "#7a1f3d"},
-                                     labels={"delta": "Cliff's δ (Vitória vs Derrota)", "rótulo": ""},
-                                     title="Tamanho de efeito por variável  (★ = p<0,05)")
-                        fig.update_layout(height=max(360, 22 * len(ef)), legend_title="")
-                        fig.add_vline(x=0, line_color="gray")
-                        st.plotly_chart(fig, use_container_width=True)
-                        sig = ef[ef["sig"]].copy()
-                        sig["abs"] = sig["delta"].abs()
-                        sig = sig.sort_values("abs", ascending=False)
-                        if len(sig):
-                            top = " · ".join(f"{r['Variável']} (δ={r['delta']:+.2f})"
-                                             for _, r in sig.head(6).iterrows())
-                            st.success(f"**Diferenciam com significância (p<0,05):** {top}")
+                    st.subheader("🏅 Vencedor × Perdedor — teste **pareado**")
+                    st.caption("**Desenho pareado:** em cada jogo decidido, Δ = vencedor − "
+                               "perdedor. Os dois saem do **mesmo jogo** (mesmo árbitro, gramado, "
+                               "clima e adversário) — são **pares**, não amostras independentes; "
+                               "tratá-los como independentes subestima o p. Teste: **Wilcoxon "
+                               "pareado**. Efeito: **% de jogos** em que o vencedor superou o "
+                               "perdedor (50% = efeito nulo). **q** = p corrigido por **FDR "
+                               "(Benjamini-Hochberg)** para as múltiplas variáveis. Tudo por 90 min.")
+                    pw = paired_win_loss(ctx, metric_all)
+                    pcols = [c for c in pw.columns if c.startswith("Δ ")] if not pw.empty else []
+                    if not pcols:
+                        st.info("Sem jogos decididos suficientes para o teste pareado.")
+                    else:
+                        from scipy.stats import wilcoxon
+                        rows = []
+                        for c in pcols:
+                            s = pd.to_numeric(pw[c], errors="coerce").dropna()
+                            s = s[s != 0]
+                            if len(s) < 6:
+                                continue
+                            try:
+                                p = wilcoxon(s.values).pvalue
+                            except Exception:
+                                p = np.nan
+                            rows.append({"Variável": c[2:],
+                                         "Δ mediano (V−D)": round(s.median(), 2),
+                                         "% jogos V>D": round((s > 0).mean() * 100, 1),
+                                         "p": p, "n (jogos)": int(len(s))})
+                        ef = pd.DataFrame(rows, columns=["Variável", "Δ mediano (V−D)",
+                                                         "% jogos V>D", "p", "n (jogos)"])
+                        if ef.empty:
+                            st.info("Amostra insuficiente para o teste pareado.")
                         else:
-                            st.info("Nenhuma variável atinge p<0,05 — amostra pequena; "
-                                    "leia os δ como tendências, não como prova.")
-                        st.caption(f"δ>0 (dourado) = maior em vitórias. |δ|: 0,15 pequeno · 0,33 médio "
-                                   f"· 0,47 grande. n={len(win)} vitórias × {len(los)} derrotas.")
+                            ef["q (FDR)"] = np.round(fdr_bh(ef["p"].values), 4)
+                            ef["sig"] = ef["q (FDR)"] < 0.05
+                            ef["efeito"] = ef["% jogos V>D"] - 50
+                            ef = ef.reindex(ef["efeito"].abs().sort_values(ascending=False).index)
+                            ef["rótulo"] = np.where(ef["sig"], "★ " + ef["Variável"], ef["Variável"])
+                            fig = px.bar(ef.sort_values("efeito"), x="% jogos V>D", y="rótulo",
+                                         orientation="h", color="efeito",
+                                         color_continuous_scale="RdBu", range_color=[-35, 35],
+                                         title="Em % dos jogos o vencedor superou o perdedor "
+                                               "(50% = nada) · ★ = q<0,05 (FDR)")
+                            fig.add_vline(x=50, line_color="gray")
+                            fig.update_layout(height=max(360, 22 * len(ef)), yaxis_title="",
+                                              coloraxis_showscale=False)
+                            st.plotly_chart(fig, use_container_width=True)
+                            st.dataframe(ef[["Variável", "Δ mediano (V−D)", "% jogos V>D",
+                                             "q (FDR)", "n (jogos)"]], hide_index=True,
+                                         use_container_width=True)
+                            sg = ef[ef["sig"]]
+                            if len(sg):
+                                top = " · ".join(f"{r['Variável']} ({r['% jogos V>D']:.0f}%)"
+                                                 for _, r in sg.head(6).iterrows())
+                                st.success(f"**Separam vencedor de perdedor (q<0,05):** {top}")
+                            else:
+                                st.info("Nenhuma variável sobrevive à correção FDR.")
 
                     st.markdown("---")
                     st.subheader("⚖️ Diferencial vs adversário → saldo de gols")
@@ -2370,17 +2430,19 @@ with tab_ctx:
                             if len(s) < 6:
                                 continue
                             rho, pp = spearmanr(s[c], s["ΔGols"])
-                            rr.append({"Variável": c[2:], "rho": rho,
-                                       "sig": bool(pd.notna(pp) and pp < 0.05)})
-                        rk = (pd.DataFrame(rr, columns=["Variável", "rho", "sig"])
-                              .dropna(subset=["rho"]).sort_values("rho"))
+                            rr.append({"Variável": c[2:], "rho": rho, "p": pp})
+                        rk = (pd.DataFrame(rr, columns=["Variável", "rho", "p"])
+                              .dropna(subset=["rho"]))
                         if not rk.empty:
+                            rk["q"] = np.round(fdr_bh(rk["p"].values), 4)
+                            rk["sig"] = rk["q"] < 0.05
+                            rk = rk.sort_values("rho")
                             rk["rótulo"] = np.where(rk["sig"], "★ Δ" + rk["Variável"],
                                                     "Δ" + rk["Variável"])
                             fig = px.bar(rk, x="rho", y="rótulo", orientation="h", color="rho",
                                          color_continuous_scale="RdBu", range_color=[-0.6, 0.6],
                                          labels={"rho": "Spearman(Δvariável, Δgols)", "rótulo": ""},
-                                         title="O que — feito melhor que o rival — vira saldo (★ p<0,05)")
+                                         title="O que — feito melhor que o rival — vira saldo (★ q<0,05, FDR)")
                             fig.update_layout(height=max(360, 22 * len(rk)), coloraxis_showscale=False)
                             fig.add_vline(x=0, line_color="gray")
                             st.plotly_chart(fig, use_container_width=True)
@@ -2428,11 +2490,11 @@ with tab_ctx:
                            "eficiente de quem 'corre muito para pouco'.")
                 e = cdf.copy()
                 specs = [
-                    ("m alta intensidade / progressão", "Z4+Z5 (km)", "Progressões", 1000, "menor = melhor"),
-                    ("m alta intensidade / line break", "Z4+Z5 (km)", "Line breaks", 1000, "menor = melhor"),
-                    ("m alta intensidade / finalização", "Z4+Z5 (km)", "Finalizações", 1000, "menor = melhor"),
-                    ("xG por km de Z4+Z5", "xG", "Z4+Z5 (km)", 1, "maior = melhor"),
-                    ("Pressões por km", "Pressões def.", "Dist. total (km)", 1, "densidade de pressão"),
+                    ("m alta intensidade / progressão", "Z4+Z5 (km/90)", "Progressões", 1000, "menor = melhor"),
+                    ("m alta intensidade / line break", "Z4+Z5 (km/90)", "Line breaks", 1000, "menor = melhor"),
+                    ("m alta intensidade / finalização", "Z4+Z5 (km/90)", "Finalizações", 1000, "menor = melhor"),
+                    ("xG por km de Z4+Z5", "xG", "Z4+Z5 (km/90)", 1, "maior = melhor"),
+                    ("Pressões por km", "Pressões def.", "Dist. total (km/90)", 1, "densidade de pressão"),
                     ("Finalizações por 100 passes", "Finalizações", "Passes", 100, "maior = mais direto"),
                 ]
                 effcols = []
@@ -2480,10 +2542,10 @@ with tab_ctx:
                            "distância em alta intensidade (Z4+Z5), abaixo/acima da mediana.")
                 use_ci = st.checkbox("Barras de erro = IC 95% (em vez de desvio-padrão)",
                                      value=True, key="ctx_ci")
-                base = cdf.dropna(subset=["Dist. total (km)", "Z4+Z5 (km)"]).copy()
-                td_med, z_med = base["Dist. total (km)"].median(), base["Z4+Z5 (km)"].median()
-                base["Perfil"] = (np.where(base["Dist. total (km)"] >= td_med, "TD alto", "TD baixo")
-                                  + " / " + np.where(base["Z4+Z5 (km)"] >= z_med,
+                base = cdf.dropna(subset=["Dist. total (km/90)", "Z4+Z5 (km/90)"]).copy()
+                td_med, z_med = base["Dist. total (km/90)"].median(), base["Z4+Z5 (km/90)"].median()
+                base["Perfil"] = (np.where(base["Dist. total (km/90)"] >= td_med, "TD alto", "TD baixo")
+                                  + " / " + np.where(base["Z4+Z5 (km/90)"] >= z_med,
                                                      "Z4+Z5 alto", "Z4+Z5 baixo"))
                 order = [o for o in ["TD baixo / Z4+Z5 baixo", "TD alto / Z4+Z5 baixo",
                                      "TD baixo / Z4+Z5 alto", "TD alto / Z4+Z5 alto"]
@@ -2520,7 +2582,7 @@ with tab_ctx:
                 xv = c1.selectbox("Eixo X (físico / resultado)", ctx_xcols,
                                   index=min(1, len(ctx_xcols) - 1), key="ctx_x")
                 yv = c2.selectbox("Eixo Y (técnico-tático)", ctx_ycols, key="ctx_y")
-                ctrl_opts = ["(nenhum)"] + [c for c in ["Posse (%)", "Passes", "Dist. total (km)"]
+                ctrl_opts = ["(nenhum)"] + [c for c in ["Posse (%)", "Passes", "Dist. total (km/90)"]
                                             if c in cdf.columns and c not in (xv, yv)]
                 ctrl = c3.selectbox("Controlar por (corr. parcial)", ctrl_opts, key="ctx_ctrl")
                 sc = cdf.copy()
@@ -2559,7 +2621,7 @@ with tab_ctx:
             with csub[4]:
                 st.subheader("Matriz de correlação (físico × técnico)")
                 allv = ctx_xcols + ctx_ycols
-                default = [v for v in ["Dist. total (km)", "Z4+Z5 (km)", "# Sprints", "Pontos",
+                default = [v for v in ["Dist. total (km/90)", "Z4+Z5 (km/90)", "# Sprints /90", "Pontos",
                                        "xG", "Posse (%)", "Finalizações", "Passes", "Pressões def."]
                            if v in allv]
                 pick = st.multiselect("Variáveis", allv, default=default, key="ctx_corr")
@@ -2570,8 +2632,11 @@ with tab_ctx:
                                     title="Correlação de Spearman (físico × técnico)")
                     fig.update_layout(height=600)
                     st.plotly_chart(fig, use_container_width=True)
-                    st.caption("Azul = relação positiva; vermelho = negativa. "
-                               "Ex.: ver se mais alta intensidade anda junto com mais xG/pressão.")
+                    st.caption("⚠️ **Vista exploratória — sem inferência.** Com k variáveis são "
+                               "k(k−1)/2 correlações simultâneas (ex.: 32 variáveis = 496 pares), "
+                               "então **não** leia significância aqui: por acaso ~25 pares dariam "
+                               "p<0,05. Use para gerar hipóteses e teste-as nas abas com correção "
+                               "FDR. Azul = relação positiva; vermelho = negativa. Tudo por 90 min.")
                 else:
                     st.info("Selecione ao menos 2 variáveis.")
 
