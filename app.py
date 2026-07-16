@@ -228,6 +228,9 @@ MATCHES = [
        scorers="1–2 após prorrogação"),
     _M("ARGENTINA", 3, "SWITZERLAND", 1, "11/07/2026", round="Quarter-finals",
        scorers="3–1 após prorrogação"),
+    # ── Semifinais ──
+    _M("FRANCE", 0, "SPAIN", 2, "14/07/2026", round="Semi-finals"),
+    _M("ENGLAND", 1, "ARGENTINA", 2, "15/07/2026", round="Semi-finals"),
 ]
 
 # índice por par de seleções (canônico)

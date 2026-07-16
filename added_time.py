@@ -103,6 +103,11 @@ ADDED_TIME = {
     _key("Norway", "England"): (4, 7, 3, 2),
     # ARG 3–1 SUI (prorrogação) · 4/9/+1(105:00)/+4(120:00) → 138 min
     _key("Argentina", "Switzerland"): (4, 9, 1, 4),
+    # --- Semifinais ---
+    # FRA 0–2 ESP · 1ºT +6 (6:09 +6) · 2ºT +7 (6:57 +7) → 103 min
+    _key("France", "Spain"): (6, 7),
+    # ENG 1–2 ARG · 1ºT +3 (3:11 +3) · 2ºT +9 (11:37 +9) → 102 min
+    _key("England", "Argentina"): (3, 9),
 }
 
 
