@@ -988,6 +988,7 @@ def build_phase_table(df):
         opp = next((t for t in ts if canon(t) != canon(row["Team Name"])), None)
         e = tech_for(row["Team Name"], opp) if opp else None
         stt = (e or {}).get(canon(row["Team Name"]), {}) if e else {}
+        opst = (e or {}).get(canon(opp), {}) if (e and opp) else {}
         f90 = (row["_dur"] / 90) if row.get("_dur") else 1
         out = {}
         for c in cnt:
@@ -995,12 +996,15 @@ def build_phase_table(df):
             out[c + " /90"] = (v / f90) if (v is not None and f90) else np.nan
         for c in rat:
             out[c] = stt.get(c, np.nan)
+        # pressing AJUSTADO à posse: só se pressiona quando o rival tem a bola
+        op_pass, our_press = opst.get("Passes"), stt.get("Pressões def.")
+        out["PPDA (↓ = + pressão)"] = (op_pass / our_press) if (op_pass and our_press) else np.nan
         return pd.Series(out)
 
     if cnt or rat:
         tab = pd.concat([tab, tab.apply(tech, axis=1)], axis=1)
     tab["Sigla"] = tab["Team Name"].map(team_code)
-    variaveis = [v for v in phys + [c + " /90" for c in cnt] + rat
+    variaveis = [v for v in phys + [c + " /90" for c in cnt] + rat + ["PPDA (↓ = + pressão)"]
                  if v in tab.columns and tab[v].notna().any()]
     return tab, variaveis
 
@@ -1627,6 +1631,50 @@ with tab3:
                                   title=f"{vsel} por resultado (cada ponto = uma equipe-jogo)")
                     figb.update_layout(showlegend=False, height=440)
                     st.plotly_chart(figb, use_container_width=True)
+
+                    with st.expander("📐 Nota metodológica — todos os tratamentos e testes"):
+                        st.markdown(f"""
+**1. Unidade de análise: a equipe-jogo** (n = {len(prt)}; {' · '.join(f'{g}: {int((prt["Resultado"]==g).sum())}' for g in groups)}).
+O resultado é um desfecho **da equipe**. Jogadores da mesma partida compartilham time,
+adversário e contexto — não são observações independentes. Usar o jogador como unidade seria
+**pseudorreplicação**: infla o n em ~6× e produz p-valores artificialmente pequenos (inválidos).
+
+**2. Normalização (por que tudo é relativo).**
+- *Físico*: para cada jogador, a métrica **por minuto efetivamente jogado** (m/min), com a duração
+  individual real (substituições e acréscimos); depois a **média** dos jogadores da equipe.
+- *Técnico-tático*: totais da equipe convertidos **por 90 min** (valor × 90 ÷ duração da partida).
+  Isso neutraliza acréscimos longos e **prorrogação** (jogos de 120'+), que inflariam totais brutos.
+- *Percentuais* (posse, acerto de passe) e *razões* (PPDA) não são normalizados — já são relativos.
+
+**3. Testes aplicados.**
+- **Kruskal-Wallis** (omnibus) por variável, comparando os **três** grupos (V/E/D). Não-paramétrico:
+  não assume normalidade nem homogeneidade de variâncias; robusto a outliers e a grupos
+  desbalanceados.
+- **Mann-Whitney U** (bicaudal) como *post-hoc* para o contraste de interesse **Vitória × Derrota**.
+- **Cliff's δ** como tamanho de efeito: probabilidade de um valor da Vitória superar um da Derrota,
+  menos o inverso (−1 a +1; 0 = distribuições idênticas). Independe de escala e de distribuição.
+  Limiares (Romano et al., 2006): |δ| < 0,147 desprezível · < 0,33 pequeno · < 0,474 médio ·
+  ≥ 0,474 grande.
+
+**4. Correção para múltiplas comparações (FDR).** Testar ~{len(prvars)} variáveis a α=0,05 gera,
+só por acaso, ~{max(1, round(0.05*len(prvars)))} falso(s) positivo(s). Aplicamos
+**Benjamini-Hochberg**, que controla a **FDR (False Discovery Rate)** — a *proporção esperada de
+falsos alarmes entre os achados declarados significativos*. O resultado é o **q-valor**: usando
+q < 0,05, espera-se que ≈5% dos achados sejam falsos. **Leia o q, não o p bruto.** Preferimos BH a
+Bonferroni porque este último, ao proteger contra *qualquer* falso positivo, destrói o poder
+estatístico e esconde efeitos reais.
+
+**5. Limites de interpretação (importante).**
+- Estudo **observacional**: associação **não** é causalidade.
+- Várias métricas são **consequência do contexto**, não causa do resultado. Exemplo claro:
+  **pressões defensivas** só podem ocorrer quando o **adversário tem a bola** — seu volume depende
+  de quanto você **não** tem a posse e do placar (quem está perdendo corre atrás). Por isso a
+  tabela inclui o **PPDA** (passes do adversário por ação de pressão), que é **ajustado à posse** e
+  é a medida justa de intensidade de pressing.
+- Empates do mata-mata (decididos na prorrogação/pênaltis) entram como **empate no tempo
+  regulamentar**.
+- Sem ajuste para **força do adversário** nem para **estado de jogo** (evolução do placar).
+""")
 
         # ===================================================================
         # POR POSIÇÃO  (#2 por posição · #4 z-score · #10 distribuição)
